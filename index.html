@@ -123,6 +123,9 @@
 
   <div class="sec">
     <div class="toggles">
+      <label class="tg"><input type="checkbox" id="tPrimary" checked>一次元件</label>
+      <label class="tg"><input type="checkbox" id="tCable" checked>电缆接线</label>
+      <label class="tg"><input type="checkbox" id="tSecondary" checked>二次元件</label>
       <label class="tg"><input type="checkbox" id="tMount" checked>安装梁</label>
       <label class="tg"><input type="checkbox" id="tDim" checked>尺寸标注</label>
       <label class="tg"><input type="checkbox" id="tSpin" checked>自动旋转</label>
@@ -161,7 +164,8 @@ try {
   throw e;
 }
 
-const P = { W:0.80, D:1.00, H:2.20, lod:2, mount:true, dim:true };
+const P = { W:0.80, D:1.00, H:2.20, lod:2, mount:true, dim:true,
+            primary:true, cable:true, secondary:true };
 const SEC = { a:0.045, b:0.070, t:0.0035 };
 
 const canvas = document.getElementById('c');
@@ -227,6 +231,18 @@ const matSteel = new THREE.MeshStandardMaterial({ color:0xC5CDD7, metalness:0.72
 const matSteelDark = new THREE.MeshStandardMaterial({ color:0xA9B4C1, metalness:0.68, roughness:0.42 });
 const matZinc = new THREE.MeshStandardMaterial({ color:0xD3DAE2, metalness:0.60, roughness:0.38 });
 const matLine = new THREE.LineBasicMaterial({ color:0x1B4F9C, transparent:true, opacity:0.85 });
+
+const matBreaker     = new THREE.MeshStandardMaterial({ color:0x4C5764, metalness:0.35, roughness:0.55 });
+const matBreakerDark = new THREE.MeshStandardMaterial({ color:0x303943, metalness:0.42, roughness:0.48 });
+const matPanelBox    = new THREE.MeshStandardMaterial({ color:0x8E99A6, metalness:0.30, roughness:0.60 });
+const matGlass       = new THREE.MeshStandardMaterial({ color:0xDCE8F2, metalness:0.05, roughness:0.10, emissive:0x2A3A4C, emissiveIntensity:0.22 });
+const matPhaseA      = new THREE.MeshStandardMaterial({ color:0xE0B400, metalness:0.55, roughness:0.34 });
+const matPhaseB      = new THREE.MeshStandardMaterial({ color:0x1E9C46, metalness:0.55, roughness:0.34 });
+const matPhaseC      = new THREE.MeshStandardMaterial({ color:0xD13B2C, metalness:0.55, roughness:0.34 });
+const matCopper      = new THREE.MeshStandardMaterial({ color:0xB87333, metalness:0.86, roughness:0.28 });
+const matInsulator   = new THREE.MeshStandardMaterial({ color:0x8A4A3C, metalness:0.14, roughness:0.72 });
+const matCable       = new THREE.MeshStandardMaterial({ color:0x22252A, metalness:0.08, roughness:0.88 });
+const matGhost       = new THREE.MeshStandardMaterial({ color:0xA8B2BF, metalness:0.20, roughness:0.80, transparent:true, opacity:0.32 });
 
 const root = new THREE.Group();
 const dimGroup = new THREE.Group();
@@ -326,6 +342,7 @@ function build(){
     }
   }
 
+  buildComponents();
   buildDims();
   updateStats();
 }
@@ -342,6 +359,152 @@ function dimLabel(text, pos){
   const o = new CSS2DObject(d);
   o.position.copy(pos);
   dimGroup.add(o);
+}
+
+function buildComponents(){
+  const { W, D, H, lod } = P;
+  const xIn = W / 2 - SEC.a, zIn = D / 2 - SEC.b;
+  const ghost = lod === 1;
+
+  const M = (m) => ghost ? matGhost : m;
+  const put = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh); return mesh; };
+  const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(m));
+  const cyl = (r, h, m, s) => new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, s || 16), M(m));
+
+  if (P.primary){
+    const busLen = Math.max(0.32, W - 2 * SEC.a - 0.20);
+    const busZ = -zIn + 0.17, busY = H * 0.855;
+    [[matPhaseC, 0.082], [matPhaseB, 0], [matPhaseA, -0.082]].forEach(([m, dy]) => {
+      const bar = box(busLen, 0.012, 0.05, m);
+      bar.position.set(0, busY + dy, busZ);
+      put(bar);
+    });
+    if (lod >= 2){
+      [-0.19, 0, 0.19].forEach(x => {
+        if (Math.abs(x) > xIn - 0.09) return;
+        const ins = cyl(0.026, 0.10, matInsulator, 14);
+        ins.position.set(x, busY - 0.20, busZ); put(ins);
+      });
+    }
+
+    const bw = Math.min(W * 0.62, 0.52);
+    const bh = H * 0.185, bd = Math.min(D * 0.40, 0.40);
+    const by = H * 0.50, bz = zIn * 0.40;
+
+    const chassis = box(bw, bh * 0.15, bd, matBreakerDark);
+    chassis.position.set(0, by - bh * 0.44, bz); put(chassis);
+
+    const body = box(bw, bh * 0.60, bd * 0.92, matBreaker);
+    body.position.set(0, by, bz); put(body);
+
+    if (!ghost){
+      const face = box(bw * 0.60, bh * 0.44, 0.016, matPanelBox);
+      face.position.set(0, by, bz + bd * 0.475); put(face);
+      [-1, 1].forEach(k => {
+        const lamp = cyl(0.015, 0.016, k > 0 ? matPhaseC : matPhaseB, 12);
+        lamp.rotation.x = Math.PI / 2;
+        lamp.position.set(k * bw * 0.21, by + bh * 0.11, bz + bd * 0.49); put(lamp);
+      });
+    }
+
+    if (lod >= 2){
+      [-1, 0, 1].forEach(k => {
+        const pole = cyl(bw * 0.085, bh * 0.44, matBreakerDark, 14);
+        pole.position.set(k * bw * 0.30, by + bh * 0.52, bz); put(pole);
+        const cap = cyl(bw * 0.105, 0.020, matCopper, 14);
+        cap.position.set(k * bw * 0.30, by + bh * 0.75, bz); put(cap);
+      });
+    }
+    if (lod >= 3){
+      [-1, 0, 1].forEach(k => {
+        const tc = box(0.075, 0.085, 0.085, matInsulator);
+        tc.position.set(k * bw * 0.30, by + bh * 0.86, bz); put(tc);
+      });
+    }
+
+    const ctY = H * 0.285, ctZ = -zIn + 0.24;
+    const ctR = Math.min(0.052, W * 0.07);
+    [-1, 0, 1].forEach(k => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(ctR, ctR * 0.40, 6, 14), M(matInsulator));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(k * Math.min(W * 0.19, 0.16), ctY, ctZ); put(ring);
+    });
+
+    const gnd = box(Math.max(0.30, W * 0.58), 0.010, 0.038, matCopper);
+    gnd.position.set(0, H * 0.075, -zIn + 0.16); put(gnd);
+
+    if (lod >= 3){
+      [-1, 0, 1].forEach(k => {
+        const mo = cyl(0.024, 0.11, matInsulator, 12);
+        mo.position.set(k * Math.min(W * 0.20, 0.17), H * 0.155, -zIn + 0.245); put(mo);
+      });
+    }
+  }
+
+  if (P.cable){
+    const cx = Math.min(W * 0.19, 0.16);
+    const ctY = H * 0.285, ctZ = -zIn + 0.24;
+
+    if (lod === 1){
+      const blk = box(cx * 2 + 0.06, H * 0.30, 0.14, matGhost);
+      blk.position.set(0, H * 0.19, -zIn + 0.22); put(blk);
+    } else {
+      const phases = [matPhaseC, matPhaseB, matPhaseA];
+      [-1, 0, 1].forEach((k, i) => {
+        const x = k * cx;
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(x, 0.055, -zIn + 0.33),
+          new THREE.Vector3(x, 0.18, -zIn + 0.29),
+          new THREE.Vector3(x, 0.40, -zIn + 0.26),
+          new THREE.Vector3(x, ctY, ctZ),
+          new THREE.Vector3(x, ctY + 0.20, ctZ - 0.01),
+          new THREE.Vector3(x, ctY + 0.32, ctZ + 0.22)
+        ]);
+        put(new THREE.Mesh(new THREE.TubeGeometry(curve, 30, 0.019, 8, false), matCable));
+        const head = cyl(0.024, 0.055, phases[i], 12);
+        head.position.set(x, 0.085, -zIn + 0.325); put(head);
+        const boot = cyl(0.023, 0.045, matBreakerDark, 12);
+        boot.position.set(x, ctY + 0.29, ctZ + 0.20); put(boot);
+      });
+
+      if (lod >= 3){
+        [[-0.075, 0], [0.105, 0]].forEach(([dx]) => {
+          const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(dx, 0.06, -zIn + 0.35),
+            new THREE.Vector3(dx + 0.015, 0.30, -zIn + 0.31),
+            new THREE.Vector3(dx + 0.030, 0.54, -zIn + 0.35),
+            new THREE.Vector3(dx + 0.040, 0.74, -zIn + 0.41)
+          ]);
+          put(new THREE.Mesh(new THREE.TubeGeometry(curve, 22, 0.008, 6, false), matCable));
+        });
+      }
+    }
+
+    const tw = Math.max(0.26, W * 0.46);
+    const term = box(tw, 0.052, 0.050, matPanelBox);
+    term.position.set(0, H * 0.195, -zIn + 0.055); put(term);
+    if (lod >= 3){
+      const n = 7;
+      for (let i = 0; i < n; i++){
+        const dv = box(0.006, 0.058, 0.054, matBreakerDark);
+        dv.position.set(-tw / 2 + (i + 1) * tw / (n + 1), H * 0.195, -zIn + 0.055);
+        put(dv);
+      }
+    }
+  }
+
+  if (P.secondary && lod >= 2){
+    const my = H * 0.855, mz = zIn - 0.085;
+    const plate = box(Math.max(0.30, W * 0.44), 0.125, 0.012, matPanelBox);
+    plate.position.set(0, my, mz - 0.014); put(plate);
+    [-1, 0, 1].forEach(k => {
+      const dial = cyl(0.034, 0.014, matGlass, 18);
+      dial.rotation.x = Math.PI / 2;
+      dial.position.set(k * 0.115, my, mz); put(dial);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.0045, 6, 18), matBreakerDark);
+      rim.position.set(k * 0.115, my, mz); put(rim);
+    });
+  }
 }
 
 function buildDims(){
@@ -377,6 +540,14 @@ function buildDims(){
   ];
   if (P.mount && P.lod >= 2) tags.push(['元件安装梁', new THREE.Vector3(-W * 0.30, 0.96, D / 2 + 0.09)]);
   if (P.lod === 3) tags.push(['加强竖梁', new THREE.Vector3(0.02, H * 0.32, D / 2 + 0.09)]);
+  if (P.primary && P.lod >= 2){
+    tags.push(['主母排 A/B/C', new THREE.Vector3(W * 0.22, H * 0.945, -D / 2 - 0.08)]);
+    tags.push(['手车式断路器', new THREE.Vector3(W * 0.36, H * 0.58, D / 2 + 0.10)]);
+    tags.push(['电流互感器', new THREE.Vector3(W * 0.34, H * 0.245, D / 2 + 0.10)]);
+  }
+  if (P.cable && P.lod >= 2){
+    tags.push(['电力电缆', new THREE.Vector3(-W * 0.36, H * 0.135, D / 2 + 0.10)]);
+  }
 
   tags.forEach(([txt, pos]) => {
     const d = document.createElement('div');
@@ -389,9 +560,9 @@ function buildDims(){
 }
 
 const LOD_NOTE = {
-  1: '<b>LOD 1 外形</b> — 方柱外廓，只表达占位尺寸。<br>用于空间校核与方案排布。',
-  2: '<b>LOD 2 工程</b> — 真实 C 型钢截面 + 前后安装梁。<br>可装配、可做干涉与维护空间检查。',
-  3: '<b>LOD 3 精细</b> — 增加加强竖梁、垫脚板、角部连接件。<br>可出加工图与装配图。'
+  1: '<b>LOD 1 外形</b> — 骨架方柱外廓 + 元器件占位块。<br>只用于空间校核与方案排布。',
+  2: '<b>LOD 2 工程</b> — 真实 C 型钢 + 断路器 / 互感器 / 三相母排<br>+ 电缆走向 + 端子排。可装配、可做干涉检查。',
+  3: '<b>LOD 3 精细</b> — 追加二次仪表、避雷器、支柱绝缘子、<br>备用控制电缆、端子分片。可出加工与装配图。'
 };
 
 function updateStats(){
@@ -446,9 +617,13 @@ document.getElementById('lod').addEventListener('click', e => {
   build();
 });
 
-document.getElementById('tMount').addEventListener('change', e => { P.mount = e.target.checked; build(); });
-document.getElementById('tDim').addEventListener('change', e => { P.dim = e.target.checked; buildDims(); });
-document.getElementById('tSpin').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
+const bind = (id, fn) => document.getElementById(id).addEventListener('change', e => fn(e.target.checked));
+bind('tPrimary',   v => { P.primary = v; build(); });
+bind('tCable',     v => { P.cable = v; build(); });
+bind('tSecondary', v => { P.secondary = v; build(); });
+bind('tMount',     v => { P.mount = v; build(); });
+bind('tDim',       v => { P.dim = v; buildDims(); });
+bind('tSpin',      v => { controls.autoRotate = v; });
 document.getElementById('bReset').addEventListener('click', () => { setView(); });
 
 document.getElementById('tSpin').checked = true;
