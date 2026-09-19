@@ -2,13 +2,14 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>上海纳杰电气 · 高低压开关柜柜内三维模型</title>
 <style>
   :root{
     --blue:#1B4F9C; --blue-d:#123A75; --blue-l:#E8EFF9;
     --ink:#1F2937; --ink2:#5B6675; --ink3:#8A94A3;
     --line:#D6DEE8; --panel:rgba(255,255,255,.95);
+    --grabh:56px;            /* 移动端底部抽屉抓手条高度 */
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:#EDF1F6;
@@ -27,13 +28,16 @@
   .brand .rule{width:1px;height:34px;background:var(--line)}
 
   .panel{position:absolute;right:24px;top:22px;width:268px;background:var(--panel);
-    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    border:1px solid var(--line);border-radius:12px;
     box-shadow:0 8px 26px rgba(24,52,92,.09);backdrop-filter:blur(6px);
-    max-height:calc(100vh - 44px);overflow-y:auto;scrollbar-width:thin;
-    scrollbar-color:#C6D3E2 transparent}
-  .panel::-webkit-scrollbar{width:6px}
-  .panel::-webkit-scrollbar-thumb{background:#C6D3E2;border-radius:3px}
-  .panel::-webkit-scrollbar-track{background:transparent}
+    max-height:calc(100vh - 44px);display:flex;flex-direction:column;overflow:hidden}
+  .pbody{padding:14px 16px;overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:#C6D3E2 transparent}
+  .pbody::-webkit-scrollbar{width:6px}
+  .pbody::-webkit-scrollbar-thumb{background:#C6D3E2;border-radius:3px}
+  .pbody::-webkit-scrollbar-track{background:transparent}
+  .grab{display:none}      /* 仅移动端出现：底部抽屉的抓手 */
+  .mhint{display:none}     /* 仅移动端出现：触屏手势提示 */
   .panel h2{margin:0 0 11px;font-size:13px;font-weight:600;color:var(--blue-d);
     letter-spacing:.6px;display:flex;align-items:center;gap:7px}
   .panel h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--blue)}
@@ -95,6 +99,10 @@
     opacity:0;transition:opacity .35s}
   body.exploded #labels .extag{opacity:1}
   body.exploded #labels .tag{opacity:0}
+  /* 抽屉升起时不显示 3D 引注：面板占掉半屏，剩下的可见带（横屏只有 150px 上下）
+     再塞十几条标签必然糊到面板上。收起抽屉即恢复——这才是"看参数"和"看模型"的正确分工。 */
+  #labels{transition:opacity .22s}
+  body.sheet #labels{opacity:0}
 
   #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:12px;background:#EDF1F6;z-index:20;transition:opacity .5s}
@@ -103,6 +111,90 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   #boot p{font-size:13px;color:var(--ink2);margin:0}
   #boot.gone{opacity:0;pointer-events:none}
+
+  /* ═════════════════════ 移动端适配 ═════════════════════
+     思路：画布始终全屏（模型尽量大），参数面板变成底部抽屉 ——
+     平时只露一条抓手，点开后才升起。取景由 JS 的 fitBias() 让出被遮住的区域。 */
+  @media (max-width:860px){
+    :root{--grabh:56px}
+
+    /* 顶部品牌条：压成一行，去掉副标题 */
+    .brand{left:12px;top:calc(10px + env(safe-area-inset-top));gap:9px}
+    .brand .mark{width:34px;height:34px;border-radius:8px;font-size:15px}
+    .brand h1{font-size:14px;letter-spacing:.2px}
+    .brand p,.brand .rule,.brand .h1x{display:none}
+
+    /* 统计条挪到右上角，只留最要紧的数字 */
+    .foot{left:auto;right:12px;bottom:auto;top:calc(10px + env(safe-area-inset-top));gap:0}
+    .stats{padding:6px 11px;gap:10px;border-radius:9px}
+    .stats div{font-size:11px}
+    .stats div:last-child{display:none}
+    .hint{display:none}
+
+    /* 面板 → 底部抽屉 */
+    .panel{left:0;right:0;top:auto;bottom:0;width:auto;
+      border-radius:16px 16px 0 0;border-left:0;border-right:0;border-bottom:0;
+      max-height:calc(100vh - 92px);max-height:calc(100dvh - 92px);
+      box-shadow:0 -8px 30px rgba(24,52,92,.16);
+      padding-bottom:env(safe-area-inset-bottom);
+      position:fixed;       /* 必须是 fixed：absolute 时 translateY 会把文档撑高，出现"滚动余量" */
+      backdrop-filter:none;  /* 手机 GPU 上整屏模糊很贵，面板本身 95% 不透明，肉眼无差 */
+      transform:translateY(calc(100% - var(--grabh)));
+      transition:transform .34s cubic-bezier(.32,.72,0,1);
+      will-change:transform}
+    /* 升起时只占 44dvh，上面留 56% 给模型；否则"看参数"的片刻模型整块被盖住 */
+    .panel.open{transform:translateY(0);max-height:44dvh}
+
+    .grab{display:flex;align-items:center;justify-content:center;gap:8px;
+      width:100%;height:var(--grabh);flex:0 0 auto;position:relative;
+      font:inherit;font-size:13px;font-weight:600;letter-spacing:.4px;color:var(--blue-d);
+      background:none;border:0;cursor:pointer;
+      -webkit-tap-highlight-color:transparent}
+    .grab i{position:absolute;left:50%;top:8px;transform:translateX(-50%);
+      width:38px;height:4px;border-radius:2px;background:#CBD6E4}
+    .grab b{font-size:10px;color:var(--ink3);transition:transform .3s;font-weight:400}
+    .panel.open .grab b{transform:rotate(180deg)}
+    .grab::after{content:"";position:absolute;left:16px;right:16px;bottom:0;height:1px;
+      background:#EDF1F6}
+
+    .pbody{padding:12px 16px 16px}
+    .mhint{display:block;margin:0 0 12px;font-size:11.5px;color:var(--ink3);text-align:center}
+
+    /* 触屏友好：加大拇指与点击区 */
+    .panel h2{font-size:14px;margin-bottom:12px}
+    .sec{margin-bottom:12px}
+    .sec + .sec{padding-top:12px}
+    .row{margin-bottom:7px}
+    .row .k{font-size:13px}
+    .row .v{font-size:14px}
+    input[type=range]{height:6px;border-radius:3px;margin-bottom:15px}
+    input[type=range]::-webkit-slider-thumb{width:23px;height:23px;border-width:3px}
+    .seg button{padding:11px 0;font-size:13px;border-radius:9px}
+    .tg{font-size:13.5px;gap:9px;padding:0 2px;min-height:34px}
+    .tg input{width:20px;height:20px}
+    .toggles{gap:2px 16px}
+    .reset{padding:12px;font-size:13.5px;border-radius:9px;margin-top:14px}
+    .lodnote{font-size:12px;line-height:1.5;padding:8px 10px}
+
+    /* 3D 引注在小屏上只留"安全净距"两个短签：375 宽的屏塞不下十几条引注，
+       而尺寸 / 净距数字面板里都有（尺寸行 + #guardNote），信息不丢 */
+    .dim{display:none}
+    .tag{display:none}
+    .tag.guard{display:block;font-size:10px;max-width:124px;padding:3px 6px;line-height:1.28}
+    .extag{font-size:10.5px;padding:2px 7px;border-radius:5px;letter-spacing:-.1px}
+    .extag .en{display:none}   /* 分解态零件名：小屏只留中文 */
+  }
+
+  /* 横屏手机：高度很矮，抽屉别占满 */
+  @media (max-width:900px) and (orientation:landscape){
+    :root{--grabh:44px}
+    .panel{max-height:min(66vh,320px);max-height:min(66dvh,320px)}
+    .panel.open{max-height:min(54dvh,290px)}
+    .grab i{top:6px;width:34px;height:3px}
+    .brand .mark{width:30px;height:30px;font-size:13px;border-radius:7px}
+    .brand h1{font-size:13px}
+    .mhint{display:none}
+  }
 </style>
 </head>
 <body>
@@ -113,12 +205,17 @@
   <div class="mark">NJA</div>
   <div class="rule"></div>
   <div>
-    <h1>高低压开关柜 · 柜内三维模型</h1>
+    <h1>高低压开关柜<span class="h1x"> · 柜内三维模型</span></h1>
     <p>上海纳杰电气 · 参数化生成 / 骨架 + 板件 + 一次回路 + 电缆接线</p>
   </div>
 </div>
 
-<div class="panel">
+<div class="panel" id="panel">
+ <button class="grab" id="grab" type="button" aria-expanded="false" aria-controls="panelBody">
+   <i></i><span>模型参数</span><b>▾</b>
+ </button>
+ <div class="pbody" id="panelBody">
+  <p class="mhint">单指旋转 · 双指缩放 / 平移</p>
   <h2>柜体尺寸参数</h2>
   <div class="sec">
     <div class="row"><span class="k">宽度 W</span><span class="v" id="vw">800 mm</span></div>
@@ -178,6 +275,7 @@
     </div>
     <button class="reset" id="bReset">复位视角</button>
   </div>
+ </div>
 </div>
 
 <div class="foot">
@@ -218,8 +316,10 @@ const P = { W:0.80, D:1.00, H:2.20, lod:2, mount:true, dim:true,
 const SEC = { a:0.045, b:0.070, t:0.0035 };
 
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// 小屏（手机 / 竖屏窄窗）：关掉 MSAA、降阴影分辨率，换帧率；像素比仍保留 1.8 抗锯齿观感
+const SMALL = Math.min(innerWidth, innerHeight) < 720;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !SMALL });
+renderer.setPixelRatio(Math.min(devicePixelRatio, SMALL ? 1.8 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -257,14 +357,108 @@ controls.maxDistance = 20;
 controls.maxPolarAngle = Math.PI * 0.52;
 controls.autoRotateSpeed = 0.85;
 
+// ── 视口让位：移动端底部抽屉会遮住一条，取景要把它让出来 ──
+const mqMobile = matchMedia('(max-width: 860px)');
+let sheetOpen = false;
+let lastBias = null;
+const isMobile = () => mqMobile.matches;
+// 让位比例 = 被抽屉遮住的屏高占比。收起时 ≈ 抓手高度，升起时 ≈ 抽屉高度。
+// 逐帧读 getBoundingClientRect 会强制重排，所以只在 resize / 开合时算一次，其余走缓存。
+let sheetBias = 0;
+function computeBias(){
+  if (!isMobile()){ sheetBias = 0; return; }
+  const vh = Math.max(320, innerHeight);
+  if (sheetOpen){
+    const p = document.getElementById('panel');
+    const h = p ? p.getBoundingClientRect().height : innerHeight * 0.44;
+    sheetBias = Math.min(0.62, h / vh);           // 上限 62%，再往上模型就小得看不清了
+    return;
+  }
+  const g = document.querySelector('.grab');
+  sheetBias = Math.min(0.16, (g ? g.getBoundingClientRect().height : 56) / vh);
+}
+function fitBias(){ return sheetBias; }
+// 注视点 = 模型中心 - 让位补偿；相机同步平移，视线方向不变（所以不会把视角"扭"掉）
+function aimTarget(centerY){
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const visH = 2 * camera.position.distanceTo(controls.target) * Math.tan(fov / 2);
+  const want = centerY - fitBias() / 2 * visH;
+  camera.position.y += want - controls.target.y;
+  controls.target.y = want;
+  controls.update();
+}
+function focusY(){ return P.H * (0.46 + 0.10 * P.explode); }
+
 function frameSpan(){
   // 分解后整体包络变大，取景距离要跟着放大，否则零件会飞出画面
-  const grow = 1 + P.explode * 0.62;
+  const grow = 1 + P.explode * 0.70;
   return Math.max(P.H, P.D * 1.2, P.W * 1.2) * grow;
 }
+
+// 模型真实包络（装配态）—— 竖向取景用参数化包络就够，但横向必须用真实包络：
+// 竖屏的横向 fov 只有竖向的约 0.46 倍，只按竖向定距模型会横向冲出画面。
+// 量两份：零件本体 + 安全净距盒（后者在装配态可见，必须一起进框）。
+let envParts = null, envGuards = null;   // build() / applyMotion() 里置空，下次用时重测
+const _v3a = new THREE.Vector3(), _v3b = new THREE.Vector3();
+function modelEnvBoxes(){
+  if (envParts) return;
+  const saved = EXPLODE.map(r => r.g.position.clone());
+  EXPLODE.forEach(r => r.g.position.set(0, 0, 0));
+  root.updateMatrixWorld(true);
+  const bs = new THREE.Box3(), bg = new THREE.Box3();
+  // userData.noStat 标记的是净距包络这类辅助体：统计要排除，但可见时应进取景预算
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    if (o.userData.noStat) bg.expandByObject(o);
+    else bs.expandByObject(o);
+  });
+  EXPLODE.forEach((r, i) => r.g.position.copy(saved[i]));
+  root.updateMatrixWorld(true);
+  envParts = bs; envGuards = bg;
+}
+// 横向定距：逐角解"这个角恰好落在半宽 1/M 处"所需的相机距离 ——
+//   d ≥ dz + |x| · M / tan(fovH/2)
+// 这里的 dz 是透视项：离相机近的角（dz 小 / 为负）会被投影放大，只算平行投影的半跨度
+// 会低估，竖屏下就会把模型压到画框边缘。只依赖视线方向，与 d 无关，不成循环。
+const FIT_M = 1.26;
+function fitDistH(box, right, fwd, tanH){
+  if (!box || box.isEmpty()) return 0;
+  const tx = controls.target.x, ty = controls.target.y, tz = controls.target.z;
+  let need = 0;
+  for (let i = 0; i < 8; i++){
+    const rx = ((i & 1) ? box.max.x : box.min.x) - tx;
+    const ry = ((i & 2) ? box.max.y : box.min.y) - ty;
+    const rz = ((i & 4) ? box.max.z : box.min.z) - tz;
+    const x = rx * right.x + ry * right.y + rz * right.z;
+    const dz = rx * fwd.x + ry * fwd.y + rz * fwd.z;
+    const v = dz + Math.abs(x) * FIT_M / tanH;
+    if (v > need) need = v;
+  }
+  return need;
+}
+function dVert(){
+  const fovV = THREE.MathUtils.degToRad(camera.fov);
+  // 可用高度只占视口的一部分时，等价于把取景范围放大（÷usable），模型才不会被抽屉切掉
+  const usable = Math.max(0.42, 1 - fitBias());
+  return (frameSpan() / (2 * Math.tan(fovV / 2))) * 1.58 / usable;
+}
+function dHoriz(){
+  const fovV = THREE.MathUtils.degToRad(camera.fov);
+  modelEnvBoxes();
+  const fwd = _v3a.copy(controls.target).sub(camera.position);
+  if (fwd.lengthSq() < 1e-10) fwd.set(-0.60, -0.40, -0.69);
+  fwd.normalize();
+  const right = _v3b.set(0, 1, 0).cross(fwd).normalize();      // right = up × fwd
+  const tanH = Math.tan(fovV / 2) * camera.aspect;
+  const g = (envGuards && !envGuards.isEmpty())
+    ? Math.max(0, 1 - P.explode / 0.15) : 0;                  // 净距盒在分解态自动收起 → 预算同步淡出
+  const dP = fitDistH(envParts, right, fwd, tanH);
+  if (!P.guards || g <= 0) return dP;
+  return dP + g * Math.max(0, fitDistH(envGuards, right, fwd, tanH) - dP);
+}
 function camDist(){
-  const fov = THREE.MathUtils.degToRad(camera.fov);
-  return (frameSpan() / (2 * Math.tan(fov / 2))) * 1.58;
+  // 横向单独兜一道：横屏 / 桌面端由 dVert 主导（取值不变），竖屏由 dHoriz 主导（救回出框）
+  return Math.max(dVert(), dHoriz());
 }
 // 只沿当前视线方向重新定距（保留用户的旋转角度）
 function refitDistance(){
@@ -272,18 +466,31 @@ function refitDistance(){
   camera.position.copy(controls.target.clone().add(dir.multiplyScalar(camDist())));
   controls.update();
 }
+// 让位比例变了才重新定距，避免桌面端随手改窗口大小就把用户的缩放重置掉
+function applyLayout(force){
+  computeBias();
+  const b = fitBias();
+  if (!force && b === lastBias) return;
+  lastBias = b;
+  if (camera.position.lengthSq() < 1e-8) return;   // 初始化阶段相机还没定位，别动它
+  const y = focusY();
+  refitDistance();
+  aimTarget(y);
+}
 function setView(){
   const dir = new THREE.Vector3(0.60, 0.40, 0.69).normalize();
-  controls.target.set(0, P.H * (0.46 + 0.10 * P.explode), 0);
+  const y = focusY();
+  controls.target.set(0, y, 0);
   camera.position.copy(controls.target.clone().add(dir.multiplyScalar(camDist())));
   controls.update();
+  aimTarget(y);
 }
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xD8E2EE, 0.45));
 const key = new THREE.DirectionalLight(0xffffff, 1.75);
 key.position.set(3.2, 6.0, 3.6);
 key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
+key.shadow.mapSize.set(SMALL ? 1024 : 2048, SMALL ? 1024 : 2048);
 key.shadow.camera.near = 0.5;
 key.shadow.camera.far = 20;
 key.shadow.camera.left = -3; key.shadow.camera.right = 3;
@@ -376,7 +583,10 @@ function exGroup(dir, t, name, lo){
 function exLabel(g, text, off){
   const d = document.createElement('div');
   d.className = 'extag';
-  d.textContent = text;
+  // 中英拆成两个 span：小屏只显示中文（.extag .en{display:none}）。
+  // 十几条引注在 375 宽上本来就挤，英文一去掉宽度立刻减半，标签墙就散开了。
+  const m = /^(.*?)\s*\((.+)\)\s*$/.exec(text);
+  d.innerHTML = m ? m[1] + '<span class="en"> (' + m[2] + ')</span>' : text;
   const o = new CSS2DObject(d);
   o.position.set(off[0], off[1], off[2]);
   g.add(o);
@@ -429,7 +639,7 @@ function applyExplode(){
     guardGroup.traverse(o => { if (o.isCSS2DObject) o.visible = gv; });
   }
   // 分解后整体重心上移，把相机注视点跟着抬一点，构图才不会"上重下空"
-  controls.target.y = P.H * (0.46 + 0.10 * e);
+  aimTarget(P.H * (0.46 + 0.10 * e));
   document.body.classList.toggle('exploded', e > 0.14);
 }
 
@@ -471,6 +681,27 @@ function deoverlapExtags(){
       }
     }
   }
+}
+
+// 标签横向兜底：CSS2DRenderer 把标签中心对到 3D 点上，靠近画框边缘的零件（分解态飞出去的
+// 门板、柜侧的型钢标签）会被切掉一截。两趟走 —— 先一口气读完所有 rect（只触发一次重排），
+// 再统一追加 translateX；每帧追加是安全的，因为 CSS2DRenderer 每帧会重写整个 transform。
+let clampEls = [];
+function clampLabels(){
+  const cont = document.getElementById('labels');
+  const n = cont.children.length;
+  if (!n) return;
+  if (clampEls.length !== n || !clampEls[0].isConnected) clampEls = [...cont.children];
+  const vw = innerWidth, PAD = 4;
+  const todo = [];
+  for (const el of clampEls){
+    if (el.style.display === 'none') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) continue;
+    if (r.left < PAD) todo.push([el, PAD - r.left]);
+    else if (r.right > vw - PAD) todo.push([el, vw - PAD - r.right]);
+  }
+  for (const [el, dx] of todo) el.style.transform += ' translateX(' + dx.toFixed(1) + 'px)';
 }
 
 function cProfile(a, b, t){
@@ -602,6 +833,7 @@ function clear(g){
 function build(){
   clear(root); clear(dimGroup);
   EXPLODE.length = 0;
+  envParts = null; envGuards = null;   // 零件重建了 → 取景包络必须重测
   const { W, D, H, lod } = P;
   const { a, b, t } = SEC;
   const xC = W / 2 - a / 2, zC = D / 2 - b / 2;
@@ -712,6 +944,7 @@ function build(){
 function applyMotion(){
   if (carGroup) carGroup.position.z = P.carPos * P.D * 0.62;
   doorPivots.forEach(d => { d.group.rotation.y = d.sign * d.max * P.doorOpen; });
+  envParts = null; envGuards = null;   // 门开度 / 手车位置变了 → 包络跟着变
 }
 
 function lineBetween(p1, p2, group){
@@ -923,7 +1156,9 @@ function rebuildGuards(){
   if (!guardGroup) return;
   clear(guardGroup);
   buildGuards();
+  envParts = null; envGuards = null;   // 净距盒重建了 → 取景预算重算
   applyExplode();   // 分解态下净距包络要跟着收起，别在这里把它又点亮
+  refitDistance();
   updateStats();
 }
 
@@ -1284,7 +1519,8 @@ function buildDims(){
     dimGroup.add(o);
   });
 
-  dimGroup.visible = P.explode < 0.30;
+  // 注意：CSS2DRenderer 不看父级 visible，所以必须走 applyDimVisibility 逐个同步
+  applyDimVisibility();
 }
 
 const LOD_NOTE = {
@@ -1317,8 +1553,10 @@ function resize(){
   labelRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  applyLayout(true);   // 视口变了 → 重新让出底部抽屉、重新定距
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 260));
 resize();
 setView();
 
@@ -1335,6 +1573,7 @@ function applySize(keepView){
   syncLabels();
   build();
   syncMotion();
+  refitDistance();       // 尺寸变了 → 包络变了，取景距离跟着重算
   if (keepView && Math.abs(oldH - P.H) > 0.001){
     setView();
   }
@@ -1364,6 +1603,27 @@ bind('tDoors',     v => { P.doors = v; build(); });
 bind('tSides',     v => { P.sides = v; build(); });
 bind('tGuard',     v => { P.guards = v; rebuildGuards(); });
 document.getElementById('bReset').addEventListener('click', () => { setView(); });
+
+// ── 移动端底部抽屉：抓手点击开合，开合后重新取景（把被遮住的区域让出来）──
+const panelEl = document.getElementById('panel'), grabEl = document.getElementById('grab');
+function setSheet(open){
+  sheetOpen = open;
+  panelEl.classList.toggle('open', open);
+  document.body.classList.toggle('sheet', open);   // 升起时隐掉 3D 引注（见 CSS 注释）
+  grabEl.setAttribute('aria-expanded', String(open));
+  // 等过渡跑完再重新取景，否则会一边滑一边缩放，观感很晃
+  setTimeout(() => applyLayout(true), 360);
+}
+grabEl.addEventListener('click', () => setSheet(!sheetOpen));
+// 桌面端窗口拉宽/拉高时若已不再是移动布局，确保抽屉状态不会残留
+mqMobile.addEventListener('change', () => {
+  if (!isMobile()){
+    sheetOpen = false;
+    panelEl.classList.remove('open');
+    document.body.classList.remove('sheet');
+  }
+  applyLayout(true);
+});
 
 function syncMotion(){
   const d = document.getElementById('vDoor'), c = document.getElementById('vCar');
@@ -1412,13 +1672,17 @@ document.getElementById('tSpin').checked = true;
 controls.autoRotate = true;
 // 调试出口：无头验证时用来量化断言零件位移、相机取景，不影响正常交互
 window.__DBG = { THREE, scene, camera, controls, root, dimGroup, leaderGroup,
-                 EXPLODE, G, P, renderer, applyExplode, setExplode };
+                  EXPLODE, G, P, renderer, applyExplode, setExplode,
+                  bias: () => fitBias(), camDist: () => camDist(),
+                  dVert: () => dVert(), dHoriz: () => dHoriz(),
+                  env: () => { modelEnvBoxes(); return { parts: envParts, guards: envGuards }; } };
 P.doorOpen = +rDoorEl.value / 100;
 P.carPos = +rCarEl.value / 100;
 syncLabels();
 syncMotion();
 syncExpl();
 build();
+resize();       // 包络已变成真实尺寸 → 用真实包络重算一次取景距离（含横向约束）
 
 let first = true;
 renderer.setAnimationLoop(() => {
@@ -1433,6 +1697,7 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   deoverlapExtags();   // 必须在 CSS2DRenderer 之后，否则 transform 会被它覆盖掉
+  clampLabels();       // 同理：标签贴到画框边上时兜一下，别被切掉
   if (first){
     first = false;
     const b = document.getElementById('boot');

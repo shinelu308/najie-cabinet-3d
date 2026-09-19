@@ -31,6 +31,8 @@ https://shinelu308.github.io/najie-cabinet-3d/
 | 操作 | 说明 |
 |---|---|
 | 拖拽 / 滚轮 / 右键拖拽 | 旋转 / 缩放 / 平移 |
+| **单指拖拽 / 双指捏合或平移**（触屏） | 旋转 / 缩放平移；画布 `touch-action:none`，手势不会被页面滚动抢走 |
+| **底部抽屉**（≤860px） | 参数面板收起时只露一条抓手（56px），点抓手升起；升起时只占 44dvh，上面 56% 留给模型 |
 | 宽 · 深 · 高 滑块 | 实时重建全部几何 |
 | LOD 1 / 2 / 3 | 切换模型精度等级 |
 | **装配态 / 分解态** 按钮 | 一键切换，带 950 ms easeInOutQuad 缓动 |
@@ -45,6 +47,28 @@ https://shinelu308.github.io/najie-cabinet-3d/
 | **地面网格** | 参考网格与阴影接收面 |
 
 > 分解态下尺寸标注与安全净距包络自动收起（零件散开后装配尺寸不再有意义）；零件标签会在屏幕空间做一次贪心下推，避免密集区互相压盖。
+
+## 移动端适配（本版新增）
+
+同一份 `index.html`，不另做移动版 —— 一套几何、一套取景代码，靠视口与媒体查询自行降级。
+
+| 事项 | 做法 |
+|---|---|
+| 布局 | 画布始终全屏（模型尽量大）；参数面板在 ≤860px 变**底部抽屉**，`position:fixed` + `translateY(calc(100% - 56px))` 收起、`translateY(0)` 升起 |
+| 抓手 | 56px 高整条宽按钮，带 `aria-expanded`；横屏（≤900px landscape）压到 44px |
+| 取景让位 | `fitBias()` = 被抽屉遮住的屏高占比（收起 ≈ 抓手高，升起 ≈ 抽屉高，上限 0.62）；`aimTarget()` 把模型中心平移到"可见区中心"，相机同步平移、视线方向不变 |
+| 横向取景 | 竖屏的横向 fov 只有竖向的约 0.46 倍，只按竖向定距模型会横向冲出画面 → `dHoriz()` 逐角解 `d ≥ dz + abs(x)·M/tan(fovH/2)`，取 `max(dVert, dHoriz)` |
+| 小屏标签 | `.dim` 与非净距 `.tag` 在小屏隐藏（数字都在面板里）；只留"柜前通道 / 手车抽出空间 / 母排净距"三条短签；零件名 `.extag` 只在分解态出现并缩到 10.5px |
+| 触控目标 | 复选框行 `min-height:34px`、滑块拇指 23px、段控按钮 padding 11px，全部 ≥32px |
+| 性能 | `min(innerWidth, innerHeight) < 720` 时关 MSAA、像素比降到 1.8、阴影贴图 2048 → 1024；面板去掉 `backdrop-filter`（手机 GPU 上整屏模糊很贵） |
+
+实测 6 个机型的取景余量（模型投影包围盒到画框边缘，px）：
+
+| 视口 | 桌面 1440×900 | 平板 768×1024 | 手机 412×915 | 手机 393×852 | 手机 375×667 | 横屏 844×390 |
+|---|---|---|---|---|---|---|
+| 横向最紧留白 | 340 | 47 | 29 | 27 | 23 | 278 |
+
+桌面端取景距离与上一版**逐位一致**（5.349），横向约束只在竖屏接管。
 
 ## 爆炸分解（本版新增）
 
@@ -130,6 +154,11 @@ outputs/
   preview-rack-partition.png        隔板隔离视图（三层隔室）
   preview-rack-door-shut.png        柜门关闭态
   preview-rack-car-out.png          手车摇出态
+  preview-mobile-iphone-se.png      移动端 375×667（默认 / -exploded 分解 / -sheet 抽屉展开）
+  preview-mobile-iphone-15.png      移动端 393×852（同上三态）
+  preview-mobile-pixel-7.png        移动端 412×915（同上三态）
+  preview-mobile-phone-land.png     横屏手机 844×390（同上三态）
+  preview-mobile-ipad-mini.png      平板 768×1024（同上三态）
 ```
 
 ## 技术栈
@@ -153,6 +182,11 @@ buildGuards()          →  维护通道与抽出空间包络 + 净距校核标�
 applyMotion()          →  门开合角度与手车位移（不重建几何）
 applyExplode()         →  爆炸位移 + 引导虚线端点 + 标签 / 尺寸 / 包络联动
 buildDims()            →  尺寸标注 + 部件名称标签
+computeBias()          →  抽屉让位比例（收起/升起两态，缓存，不逐帧测 DOM）
+aimTarget(centerY)     →  注视点平移到"可见区中心"，视线方向不变
+modelEnvBoxes()        →  取景包络：零件本体 + 安全净距盒（装配态量一次，重建后失效）
+fitDistH(box, …)       →  逐角解"横向恰好入框"所需的相机距离（含透视项 dz）
+dVert / dHoriz         →  竖向 / 横向定距，camDist() 取两者较大值
 CatmullRomCurve3 + TubeGeometry  →  电缆按空间路径扫掠成实体
 ```
 
@@ -166,3 +200,9 @@ CatmullRomCurve3 + TubeGeometry  →  电缆按空间路径扫掠成实体
 3. **测量前必须归零** —— 在"已分解"状态下重建（切 LOD / 切板件开关）时，`Box3.setFromObject()` 会把上一轮的抛出位移算进装配坐标，引导线起点整体漂移。
 4. **标签列表要惰性刷新** —— `CSS2DObject` 的元素是在首次渲染时才被挂进 DOM 的，`build()` 里立刻 `querySelectorAll` 会拿到空列表；用 `isConnected` 判定缓存是否失效。
 5. **透明包络不能一律显示** —— 安全净距包络在装配态是信息、在分解态是噪音，要跟着爆炸进度收起。
+6. **抽屉必须是 `position:fixed`** —— 用 `absolute` + `translateY(100%)` 时，平移后的面板会把文档高度撑到"面板底 + 平移量"（实测 375 屏 `scrollHeight` 1186 vs 视口 667）。`html,body{overflow:hidden}` 能压住滚动条，但 `scrollHeight` 是真实隐患，而且抓手底边会对不齐视口。
+7. **让位比例要按真实高度算，并且只在事件里算一次** —— `fitBias()` 被 `aimTarget()` 逐帧调用，里面直接 `getBoundingClientRect()` 会每帧强制重排。改成 `computeBias()` 缓存、在 `resize` / 抽屉开合 / 媒体查询变化时刷新。
+8. **横向定距必须带透视项** —— 只算"包络在相机 right 基向量上的平行投影半跨度"会低估：离相机近的角（`dz` 小甚至为负）投影更大。实测 768×1024 平板因此横向越界 4px。正确解是逐角求 `d ≥ dz + abs(x)·M/tan(fovH/2)`。
+9. **取景预算要跟"可见性"同步淡出** —— 安全净距盒在爆炸进度 0.15 处会整块消失，如果取景预算还按它算，那一帧会突然拉远。用 `g = max(0, 1 - explode/0.15)` 在两组包络之间线性过渡。
+10. **别用固定 `sleep` 断言 CSS 过渡** —— headless + SwiftShader 下合成器被 WebGL 挤住，340ms 的过渡跑 1.4s 还没收敛，断言会读到"滑到一半"的中间态。改成轮询 `getComputedStyle(...).transform` 直到收敛（这也是环境问题，不是代码问题）。
+11. **批量改文件后要逐条复核** —— 本轮出现过若干次"报告写入成功但文件内容没变"的情况，一次改多处容易漏。改成一次改一处、改完立刻 `grep` 确认。
