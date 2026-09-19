@@ -206,3 +206,4 @@ CatmullRomCurve3 + TubeGeometry  →  电缆按空间路径扫掠成实体
 9. **取景预算要跟"可见性"同步淡出** —— 安全净距盒在爆炸进度 0.15 处会整块消失，如果取景预算还按它算，那一帧会突然拉远。用 `g = max(0, 1 - explode/0.15)` 在两组包络之间线性过渡。
 10. **别用固定 `sleep` 断言 CSS 过渡** —— headless + SwiftShader 下合成器被 WebGL 挤住，340ms 的过渡跑 1.4s 还没收敛，断言会读到"滑到一半"的中间态。改成轮询 `getComputedStyle(...).transform` 直到收敛（这也是环境问题，不是代码问题）。
 11. **批量改文件后要逐条复核** —— 本轮出现过若干次"报告写入成功但文件内容没变"的情况，一次改多处容易漏。改成一次改一处、改完立刻 `grep` 确认。
+12. **GitHub Pages 的站点根 `favicon.ico` 会 404** —— 页面没声明 `<link rel="icon">` 时，浏览器会去请求 `https://<user>.github.io/favicon.ico`，而项目站点（非 user 站点）根目录没有这个文件。用 `page.on('response')` 抓 `statusCode >= 400` 才定位得到。塞一个内联 SVG data-URI 图标即可，不额外产生请求。
