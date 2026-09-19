@@ -87,6 +87,15 @@
     white-space:normal;max-width:168px;line-height:1.34;text-align:center;padding:4px 8px}
   .tag.guard.warn{color:#8E2A12;background:rgba(255,241,237,.96);border-color:#F0B6A4}
 
+  /* 爆炸分解标签（CSS2DRenderer 会覆写 transform，所以只能动 opacity） */
+  #labels .tag{transition:opacity .25s}
+  .extag{font-size:12px;font-weight:600;color:#123A75;white-space:nowrap;
+    background:rgba(255,255,255,.95);padding:3px 9px;border-radius:6px;
+    border:1px solid #C3D5EE;box-shadow:0 2px 10px rgba(24,52,92,.13);
+    opacity:0;transition:opacity .35s}
+  body.exploded #labels .extag{opacity:1}
+  body.exploded #labels .tag{opacity:0}
+
   #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:12px;background:#EDF1F6;z-index:20;transition:opacity .5s}
   #boot .sp{width:30px;height:30px;border:2.5px solid #CBD8E8;border-top-color:var(--blue);
@@ -118,6 +127,16 @@
     <input type="range" id="rd" min="700" max="1600" step="50" value="1000">
     <div class="row"><span class="k">高度 H</span><span class="v" id="vh">2200 mm</span></div>
     <input type="range" id="rh" min="1800" max="2600" step="50" value="2200">
+  </div>
+
+  <div class="sec">
+    <h2 style="margin-bottom:10px">装配 · 分解</h2>
+    <div class="seg" style="grid-template-columns:repeat(2,1fr)" id="explBtns">
+      <button data-e="0" class="on">装配态</button>
+      <button data-e="1">分解态</button>
+    </div>
+    <div class="row" style="margin-top:10px"><span class="k">爆炸分解</span><span class="v" id="vExpl">装配态</span></div>
+    <input type="range" id="rExpl" min="0" max="100" step="1" value="0">
   </div>
 
   <div class="sec">
@@ -153,6 +172,8 @@
       <label class="tg"><input type="checkbox" id="tMount" checked>安装梁</label>
       <label class="tg"><input type="checkbox" id="tDim" checked>尺寸标注</label>
       <label class="tg"><input type="checkbox" id="tTag" checked>部件名称</label>
+      <label class="tg"><input type="checkbox" id="tEdges" checked>钣金边线</label>
+      <label class="tg"><input type="checkbox" id="tGrid" checked>地面网格</label>
       <label class="tg"><input type="checkbox" id="tSpin" checked>自动旋转</label>
     </div>
     <button class="reset" id="bReset">复位视角</button>
@@ -178,11 +199,12 @@
 </script>
 
 <script type="module">
-let THREE, OrbitControls, CSS2DRenderer, CSS2DObject;
+let THREE, OrbitControls, CSS2DRenderer, CSS2DObject, RoomEnvironment;
 try {
   THREE = await import('three');
   ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
   ({ CSS2DRenderer, CSS2DObject } = await import('three/addons/renderers/CSS2DRenderer.js'));
+  ({ RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js'));
 } catch (e) {
   document.getElementById('boot').innerHTML =
     '<p>三维引擎加载失败，请检查网络后刷新（需访问 cdn.jsdelivr.net）</p>';
@@ -192,7 +214,7 @@ try {
 const P = { W:0.80, D:1.00, H:2.20, lod:2, mount:true, dim:true,
             primary:true, cable:true, secondary:true,
             partition:true, doors:true, sides:false, guards:true,
-            tag:true, doorOpen:1, carPos:0 };
+            tag:true, edges:true, grid:true, doorOpen:1, carPos:0, explode:0 };
 const SEC = { a:0.045, b:0.070, t:0.0035 };
 
 const canvas = document.getElementById('c');
@@ -201,10 +223,28 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.06;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xEDF1F6);
+
+// 环境光照（HDRI 等价物）：金属/镀锌面的"可信度"几乎全靠它 —— 没有环境的金属是死灰
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// 背景：竖向浅灰渐变，匹配工程出图的干净底
+function gradientBG(){
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, '#F8FBFE'); g.addColorStop(0.52, '#EDF1F6'); g.addColorStop(1, '#DCE4EE');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 8, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+scene.background = gradientBG();
 
 const labelRenderer = new CSS2DRenderer({ element: document.getElementById('labels') });
 
@@ -217,40 +257,53 @@ controls.maxDistance = 20;
 controls.maxPolarAngle = Math.PI * 0.52;
 controls.autoRotateSpeed = 0.85;
 
-function setView(){
+function frameSpan(){
+  // 分解后整体包络变大，取景距离要跟着放大，否则零件会飞出画面
+  const grow = 1 + P.explode * 0.62;
+  return Math.max(P.H, P.D * 1.2, P.W * 1.2) * grow;
+}
+function camDist(){
   const fov = THREE.MathUtils.degToRad(camera.fov);
-  const span = Math.max(P.H, P.D * 1.2, P.W * 1.2);
-  const dist = (span / (2 * Math.tan(fov / 2))) * 1.58;
+  return (frameSpan() / (2 * Math.tan(fov / 2))) * 1.58;
+}
+// 只沿当前视线方向重新定距（保留用户的旋转角度）
+function refitDistance(){
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target.clone().add(dir.multiplyScalar(camDist())));
+  controls.update();
+}
+function setView(){
   const dir = new THREE.Vector3(0.60, 0.40, 0.69).normalize();
-  controls.target.set(0, P.H * 0.46, 0);
-  camera.position.copy(controls.target.clone().add(dir.multiplyScalar(dist)));
+  controls.target.set(0, P.H * (0.46 + 0.10 * P.explode), 0);
+  camera.position.copy(controls.target.clone().add(dir.multiplyScalar(camDist())));
   controls.update();
 }
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0xD8E2EE, 1.35));
-const key = new THREE.DirectionalLight(0xffffff, 2.1);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xD8E2EE, 0.45));
+const key = new THREE.DirectionalLight(0xffffff, 1.75);
 key.position.set(3.2, 6.0, 3.6);
 key.castShadow = true;
-key.shadow.mapSize.set(1024, 1024);
+key.shadow.mapSize.set(2048, 2048);
 key.shadow.camera.near = 0.5;
 key.shadow.camera.far = 20;
 key.shadow.camera.left = -3; key.shadow.camera.right = 3;
 key.shadow.camera.top = 3; key.shadow.camera.bottom = -3;
-key.shadow.bias = -0.0012;
+key.shadow.bias = -0.0009;
+key.shadow.normalBias = 0.012;
 scene.add(key);
 
-const fill = new THREE.DirectionalLight(0xCFE0F5, 0.75);
+const fill = new THREE.DirectionalLight(0xCFE0F5, 0.30);
 fill.position.set(-4, 2.4, -3.2);
 scene.add(fill);
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity:0.17 }));
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity:0.14 }));
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-const grid = new THREE.GridHelper(12, 24, 0xC6D3E2, 0xDDE5EE);
+const grid = new THREE.GridHelper(12, 24, 0xBFD0E2, 0xD6E0EC);
 grid.material.transparent = true;
-grid.material.opacity = 0.62;
+grid.material.opacity = 0.40;
 grid.position.y = 0.001;
 scene.add(grid);
 
@@ -272,13 +325,153 @@ const matCable       = new THREE.MeshStandardMaterial({ color:0x22252A, metalnes
 const matGhost       = new THREE.MeshStandardMaterial({ color:0xA8B2BF, metalness:0.20, roughness:0.80, transparent:true, opacity:0.32 });
 const matRailOut     = new THREE.MeshStandardMaterial({ color:0x76828F, metalness:0.38, roughness:0.58, transparent:true, opacity:0.55 });
 
+// ── 细节件材质 ───────────────────────────────────────────────
+const matBolt    = new THREE.MeshStandardMaterial({ color:0x8C97A4, metalness:0.88, roughness:0.26 });
+const matShrink  = new THREE.MeshStandardMaterial({ color:0x1C1F24, metalness:0.06, roughness:0.90 });
+const matLug     = new THREE.MeshStandardMaterial({ color:0xC9CDD3, metalness:0.90, roughness:0.24 });
+const matDin     = new THREE.MeshStandardMaterial({ color:0xB9C1CA, metalness:0.80, roughness:0.34 });
+const matTerm    = new THREE.MeshStandardMaterial({ color:0xE8EAEE, metalness:0.10, roughness:0.62 });
+const matTermAlt = new THREE.MeshStandardMaterial({ color:0xD6DAE0, metalness:0.10, roughness:0.62 });
+
+// CAD 观感的关键：板件/型材加描边，金属棱线才"立"得起来
+const edgeMat = new THREE.LineBasicMaterial({ color:0x6B7887, transparent:true, opacity:0.55 });
+function withEdges(mesh, angle){
+  if (!P.edges || P.lod < 2) return mesh;
+  mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle ?? 26), edgeMat));
+  return mesh;
+}
+
+// 有环境光后要抑制材质对环境的过度响应，否则镀锌面会发白
+[matSteel, matSteelDark, matZinc, matBreaker, matBreakerDark, matPanelBox,
+ matPhaseA, matPhaseB, matPhaseC, matCopper, matInsulator, matCable,
+ matBolt, matShrink, matLug, matDin, matTerm, matTermAlt, matRailOut]
+  .forEach(m => { m.envMapIntensity = 0.80; });
+matCopper.envMapIntensity = 0.95;
+matBolt.envMapIntensity = 1.0;
+matLug.envMapIntensity = 1.0;
+
 const root = new THREE.Group();
 const dimGroup = new THREE.Group();
-scene.add(root, dimGroup);
+const leaderGroup = new THREE.Group();
+scene.add(root, dimGroup, leaderGroup);
 
 let carGroup = null;
 let guardGroup = null;
 const doorPivots = [];
+
+// ── 爆炸分解：每个零件组登记一个"分解方向 + 抛出距离"，纯变换、不重建几何 ──
+const EXPLODE = [];
+const G = {};
+const dashMat = new THREE.LineDashedMaterial({ color:0x8794A4, dashSize:0.048, gapSize:0.034,
+                                              transparent:true, opacity:0.95 });
+
+function exGroup(dir, t, name, lo){
+  const g = new THREE.Group();
+  root.add(g);
+  EXPLODE.push({ g, name, t, dir: new THREE.Vector3(dir[0], dir[1], dir[2]).normalize(),
+                 lo: lo || null, leader:null, c0:null });
+  return g;
+}
+
+function exLabel(g, text, off){
+  const d = document.createElement('div');
+  d.className = 'extag';
+  d.textContent = text;
+  const o = new CSS2DObject(d);
+  o.position.set(off[0], off[1], off[2]);
+  g.add(o);
+  return o;
+}
+
+// 引导虚线：从"装配态位置"指向"分解后的位置"，即零件的抛出轨迹
+function buildLeaders(){
+  clear(leaderGroup);
+  // 关键：测量前先把所有零件归零。否则在"已分解"状态下重建（比如切 LOD、切板件开关）
+  // 会把上一轮的抛出位移算进装配坐标，引导线起点整体漂移。
+  EXPLODE.forEach(r => r.g.position.set(0, 0, 0));
+  const box = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  EXPLODE.forEach(r => {
+    if (!r.t) return;
+    box.setFromObject(r.g);
+    if (box.isEmpty()) return;
+    r.c0 = box.getCenter(new THREE.Vector3());
+    // 标签默认贴在零件包络正上方；lo 是逐零件的微调量，用来错开中段密集区的标签
+    const lo = r.lo || [0, 0, 0];
+    exLabel(r.g, r.name, [r.c0.x + lo[0], box.max.y + 0.06 + lo[1], r.c0.z + lo[2]]);
+    const geo = new THREE.BufferGeometry().setFromPoints([r.c0.clone(), r.c0.clone()]);
+    const line = new THREE.Line(geo, dashMat);
+    line.computeLineDistances();
+    line.frustumCulled = false;
+    leaderGroup.add(line);
+    r.leader = line;
+  });
+  refreshExtagList();
+}
+
+function applyExplode(){
+  const e = P.explode;
+  EXPLODE.forEach(r => {
+    r.g.position.copy(r.dir).multiplyScalar(r.t * e);
+    if (!r.leader || !r.c0) return;
+    const p = r.c0.clone().addScaledVector(r.dir, r.t * e);
+    const attr = r.leader.geometry.attributes.position;
+    attr.setXYZ(1, p.x, p.y, p.z);
+    attr.needsUpdate = true;
+    r.leader.computeLineDistances();
+  });
+  leaderGroup.visible = e > 0.02;
+  applyDimVisibility();
+  // 安全净距包络是"装配态"的校核工具，零件散开后满屏黄框只会碍事，自动收起
+  if (guardGroup){
+    const gv = P.guards && e < 0.15;
+    guardGroup.visible = gv;
+    guardGroup.traverse(o => { if (o.isCSS2DObject) o.visible = gv; });
+  }
+  // 分解后整体重心上移，把相机注视点跟着抬一点，构图才不会"上重下空"
+  controls.target.y = P.H * (0.46 + 0.10 * e);
+  document.body.classList.toggle('exploded', e > 0.14);
+}
+
+// CSS2DRenderer 只认对象自身的 visible、不看父级 —— 尺寸标注必须逐个同步，否则
+// 关掉 dimGroup 之后标注会"留在原地不走"
+function applyDimVisibility(){
+  const vis = P.explode < 0.30;
+  dimGroup.visible = vis;
+  dimGroup.traverse(o => { if (o.isCSS2DObject) o.visible = vis; });
+}
+
+// 分解态标签很多，密集区会互相压盖。CSS2DRenderer 每帧重写 transform，
+// 所以这里在它渲染完之后，直接往 transform 后面追加 translateY 做贪心下推。
+let extagEls = [];
+function refreshExtagList(){
+  extagEls = [...document.querySelectorAll('#labels .extag')];
+}
+function deoverlapExtags(){
+  if (P.explode < 0.05) return;
+  // CSS2DRenderer 是在首次渲染时才把元素挂进 DOM 的，所以列表要惰性刷新；
+  // 重建（切 LOD / 切板件）后旧元素会被移除，用 isConnected 判定是否失效。
+  if (!extagEls.length || !extagEls[0].isConnected) refreshExtagList();
+  if (extagEls.length < 2) return;
+  const items = [];
+  for (const el of extagEls){
+    if (el.style.display === 'none') continue;
+    items.push({ el, r: el.getBoundingClientRect() });
+  }
+  items.sort((a, b) => a.r.top - b.r.top);
+  for (let i = 0; i < items.length; i++){
+    for (let j = i + 1; j < items.length; j++){
+      const a = items[i].r, b = items[j].r;
+      const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ox > 2 && oy > 2){
+        const dy = (a.bottom - b.top) + 4;
+        items[j].el.style.transform += ' translateY(' + dy.toFixed(1) + 'px)';
+        items[j].r = items[j].el.getBoundingClientRect();
+      }
+    }
+  }
+}
 
 function cProfile(a, b, t){
   const s = new THREE.Shape();
@@ -306,6 +499,96 @@ function strut(len, axis, lod, a, b, t, mat){
   return m;
 }
 
+// ── 板件的"轴向无关"小工具：同一套写法能生成 XY / XZ / ZY 三种朝向的板 ──
+function axisBox(axis, w, h, t){
+  return axis === 'z' ? new THREE.BoxGeometry(w, h, t)
+       : axis === 'y' ? new THREE.BoxGeometry(w, t, h)
+       : new THREE.BoxGeometry(t, h, w);
+}
+function axisPos(axis, u, v, d){
+  return axis === 'z' ? new THREE.Vector3(u, v, d)
+       : axis === 'y' ? new THREE.Vector3(u, d, v)
+       : new THREE.Vector3(d, v, u);
+}
+
+// 折边板：平板 + 四边折边。有折边才像钣金件，纯 Box 一眼就是"积木"
+function foldedPanel(w, h, t, hem, mat, axis){
+  axis = axis || 'z';
+  const g = new THREE.Group();
+  const put = (A, B, C, u, v, d) => {
+    const m = new THREE.Mesh(axisBox(axis, A, B, C), mat);
+    m.position.copy(axisPos(axis, u, v, d));
+    m.castShadow = true; m.receiveShadow = true;
+    if (P.edges && P.lod >= 2) withEdges(m, 20);
+    g.add(m);
+    return m;
+  };
+  put(w, h, t, 0, 0, 0);                                        // 面板
+  const hd = hem * 1.9, d = -hem / 2;
+  put(w, hem, hd, 0,  h / 2 - hem / 2, d);                      // 上折边
+  put(w, hem, hd, 0, -h / 2 + hem / 2, d);                      // 下折边
+  put(hem, h - 2 * hem, hd, -w / 2 + hem / 2, 0, d);            // 左折边
+  put(hem, h - 2 * hem, hd,  w / 2 - hem / 2, 0, d);            // 右折边
+  return g;
+}
+
+// 通风百叶：暗色衬板 + n 片倾斜叶片 —— 门板/侧板上一放，钣金味立刻就出来了
+function louver(w, h, n, axis){
+  axis = axis || 'z';
+  const g = new THREE.Group();
+  const back = new THREE.Mesh(axisBox(axis, w, h, 0.0015), matBreakerDark);
+  back.position.copy(axisPos(axis, 0, 0, -0.004));
+  g.add(back);
+  const gap = h / n;
+  for (let i = 0; i < n; i++){
+    const s = new THREE.Mesh(axisBox(axis, w * 0.94, gap * 0.60, 0.0075), matSteel);
+    s.position.copy(axisPos(axis, 0, -h / 2 + gap * (i + 0.5), 0));
+    if (axis === 'x') s.rotation.z = -0.42; else s.rotation.x = -0.42;
+    s.castShadow = true; s.receiveShadow = true;
+    if (P.edges && P.lod >= 2) withEdges(s, 20);
+    g.add(s);
+  }
+  return g;
+}
+
+// 螺栓阵列：InstancedMesh，几十颗也只是一个 draw call
+// arrange = 排列方向；face = 螺栓头朝向（'z' 朝前后 / 'x' 朝左右）
+function boltRow(n, arrange, spacing, cx, cy, cz, face){
+  const geo = new THREE.CylinderGeometry(0.0072, 0.0072, 0.013, 6);
+  if (face === 'x') geo.rotateZ(Math.PI / 2); else geo.rotateX(Math.PI / 2);
+  const inst = new THREE.InstancedMesh(geo, matBolt, n);
+  inst.castShadow = true;
+  const o = new THREE.Object3D();
+  for (let i = 0; i < n; i++){
+    const s = (i - (n - 1) / 2) * spacing;
+    if (arrange === 'x') o.position.set(cx + s, cy, cz);
+    else if (arrange === 'y') o.position.set(cx, cy + s, cz);
+    else o.position.set(cx, cy, cz + s);
+    o.updateMatrix();
+    inst.setMatrixAt(i, o.matrix);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  return inst;
+}
+
+// 紧固孔阵列：板面上的暗色小圆片，读作"冲孔" —— 钣金件最容易被忽略、又最提真实感的细节
+function holeRow(n, arrange, spacing, cx, cy, cz, face, r){
+  const geo = new THREE.CylinderGeometry(r || 0.0055, r || 0.0055, 0.0026, 10);
+  if (face === 'x') geo.rotateZ(Math.PI / 2); else geo.rotateX(Math.PI / 2);
+  const inst = new THREE.InstancedMesh(geo, matShrink, n);
+  const o = new THREE.Object3D();
+  for (let i = 0; i < n; i++){
+    const s = (i - (n - 1) / 2) * spacing;
+    if (arrange === 'x') o.position.set(cx + s, cy, cz);
+    else if (arrange === 'y') o.position.set(cx, cy + s, cz);
+    else o.position.set(cx, cy, cz + s);
+    o.updateMatrix();
+    inst.setMatrixAt(i, o.matrix);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  return inst;
+}
+
 function clear(g){
   while (g.children.length){
     const c = g.children.pop();
@@ -318,22 +601,45 @@ function clear(g){
 
 function build(){
   clear(root); clear(dimGroup);
+  EXPLODE.length = 0;
   const { W, D, H, lod } = P;
   const { a, b, t } = SEC;
   const xC = W / 2 - a / 2, zC = D / 2 - b / 2;
   const spanX = W - a, spanZ = D - b;
 
+  // ── 分解单元登记：dir = 分解方向，t = 满爆时抛出的距离(m)，lo = 标签微调 ──
+  // 排布思路对齐参考图：板件沿装配轴一字排开，内部元件按"取出方向"抛出
+  G.frame = exGroup([0, 0, 0],       0,    '柜体骨架 (Frame)');
+  G.top   = exGroup([0, 1, .06],     .72,  '顶板 (Top Plate)',      [0, .02, 0]);
+  G.bot   = exGroup([0, -1, .06],    .58,  '底板 (Bottom Plate)',   [0, .02, 0]);
+  G.sideR = exGroup([1, 0, .12],     .95,  '侧板 (Side Panel)',     [.04, .04, 0]);
+  G.sideL = exGroup([-1, 0, .12],    .95,  '侧板 (Side Panel)',     [-.04, .04, 0]);
+  G.part  = exGroup([.12, 0, -1],    .74,  '隔板 (Partition)',      [-.05, .02, 0]);
+  G.mount = exGroup([0, .5, 1],      .50,  '安装梁 (Mounting Rail)',[-.08, .10, 0]);
+  G.plate = exGroup([-.10, .22, -1], .86,  '安装板 (Mounting Plate)',[.02, .04, 0]);
+  G.doorF = exGroup([-.42, 0, 1],   1.05,  '前柜门 (Front Door)',   [.04, .02, 0]);
+  G.doorB = exGroup([.42, 0, -1],    .92,  '前后柜门 (Rear Door)',  [-.04, .02, 0]);
+  G.bus   = exGroup([-.86, .36, .36], .80,  '母排 (Busbar)',         [0, .06, 0]);
+  G.car   = exGroup([.30, 0, 1],     .78,  '断路器 (ACB/MCCB)',     [.06, .04, 0]);
+  G.ct    = exGroup([0, -.38, -1],   .60,  '互感器 (CT)',           [-.16, -.18, 0]);
+  G.cable = exGroup([.90, -.18, .30], .58, '电缆 (Cable)',          [.12, -.16, 0]);
+  G.term  = exGroup([.95, -.45, .28], .52, '端子排 (Terminal)',      [0, -.24, 0]);
+  G.meter = exGroup([0, 0, 1],       .66,  '仪表室 (Meter)',        [.10, .14, 0]);
+
   const ring = (y, mat) => {
     for (const s of [1, -1]){
-      const mx = strut(spanX, 'x', lod, a, b, t, mat); mx.position.set(0, y, s * zC); root.add(mx);
-      const mz = strut(spanZ, 'z', lod, a, b, t, mat); mz.position.set(s * xC, y, 0); root.add(mz);
+      const mx = strut(spanX, 'x', lod, a, b, t, mat); mx.position.set(0, y, s * zC);
+      if (P.edges && lod >= 2) withEdges(mx, 22); G.frame.add(mx);
+      const mz = strut(spanZ, 'z', lod, a, b, t, mat); mz.position.set(s * xC, y, 0);
+      if (P.edges && lod >= 2) withEdges(mz, 22); G.frame.add(mz);
     }
   };
 
   for (const sx of [1, -1]) for (const sz of [1, -1]){
     const col = strut(H, 'y', lod, a, b, t, matSteel);
     col.position.set(sx * xC, H / 2, sz * zC);
-    root.add(col);
+    if (P.edges && lod >= 2) withEdges(col, 22);
+    G.frame.add(col);
   }
 
   const rings = lod === 1 ? [0, H]
@@ -341,51 +647,65 @@ function build(){
     : [0, 0.10, H * 0.47, H - 0.14, H];
   rings.forEach((y, i) => ring(y, i === 0 ? matSteelDark : matSteel));
 
+  // 顶板 / 底板（折边钣金）
+  if (lod >= 2){
+    const tp = foldedPanel(W - 0.004, D - 0.004, 0.004, 0.020, matZinc, 'y');
+    tp.position.set(0, H + 0.040, 0); G.top.add(tp);
+    const bp = foldedPanel(W - 0.004, D - 0.004, 0.004, 0.020, matZinc, 'y');
+    bp.rotation.x = Math.PI;
+    bp.position.set(0, 0.042, 0); G.bot.add(bp);
+  }
+
   if (P.mount && lod >= 2){
     const ys = lod === 2 ? [0.42, 0.96, 1.50] : [0.42, 0.72, 1.02, 1.32, 1.62, 1.92];
     ys.forEach(y => {
       for (const s of [1, -1]){
         const m = strut(spanX, 'x', lod, a * 0.85, b * 0.72, t, matZinc);
         m.position.set(0, y, s * (zC - 0.115));
-        root.add(m);
+        if (P.edges && lod >= 2) withEdges(m, 22);
+        G.mount.add(m);
       }
     });
   }
 
   if (lod === 3){
-    for (const sx of [1, -1]) for (const sz of [1, -1]){
+    for (const sz of [1, -1]){
       const mid = strut(H, 'y', lod, a * 0.75, b * 0.75, t, matSteel);
       mid.position.set(0, H / 2, sz * zC);
-      root.add(mid);
+      withEdges(mid, 22);
+      G.frame.add(mid);
     }
     for (const sx of [1, -1]) for (const sz of [1, -1]){
       const foot = new THREE.Mesh(new THREE.BoxGeometry(a * 2.6, 0.024, b * 2.2), matSteelDark);
       foot.position.set(sx * xC, 0.012, sz * zC);
-      foot.castShadow = true; root.add(foot);
+      foot.castShadow = true; withEdges(foot, 20); G.frame.add(foot);
 
       for (const y of [0.135, H - 0.175]){
         const gus = new THREE.Mesh(new THREE.BoxGeometry(a * 2.2, 0.075, 0.008), matZinc);
         gus.position.set(sx * xC, y, sz * (zC + b / 2));
-        gus.castShadow = true; root.add(gus);
+        gus.castShadow = true; G.frame.add(gus);
       }
     }
     for (const sx of [1, -1]) for (const sz of [1, -1]){
       const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.012, 14), matSteelDark);
-      eye.position.set(sx * xC, H + 0.006, sz * zC);
-      eye.castShadow = true; root.add(eye);
+      eye.position.set(sx * xC, H + 0.052, sz * zC);
+      eye.castShadow = true; G.frame.add(eye);
     }
   }
 
   carGroup = new THREE.Group();
+  G.car.add(carGroup);
   guardGroup = new THREE.Group();
-  root.add(carGroup, guardGroup);
+  G.frame.add(guardGroup);
   doorPivots.length = 0;
 
   buildShell();
   buildComponents();
   buildGuards();
   buildDims();
+  buildLeaders();
   applyMotion();
+  applyExplode();
   updateStats();
 }
 
@@ -409,67 +729,119 @@ function dimLabel(text, pos){
 }
 
 function buildShell(){
-  const { W, D, H } = P;
+  const { W, D, H, lod } = P;
   const xIn = W / 2 - SEC.a, zIn = D / 2 - SEC.b;
-  const T = 0.004;
-  const add = (m) => { m.castShadow = true; m.receiveShadow = true; root.add(m); return m; };
-  const SM = (m) => P.lod === 1 ? matGhost : m;
-  const slab = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), SM(m));
+  const T = 0.004, hem = 0.016;
+  const SM = (m) => lod === 1 ? matGhost : m;
 
+  // ── 侧板 ──
   if (P.sides){
-    const sh = H - 0.03, sd = D - 2 * SEC.b - 0.006;
+    const sh = H - 0.03, sd = D - 2 * SEC.b - 0.010;
     for (const s of [1, -1]){
-      const sp = slab(T, sh, sd, matZinc);
+      const tgt = s > 0 ? G.sideR : G.sideL;
+      const sp = foldedPanel(sd, sh, T, hem, SM(matZinc), 'x');
       sp.position.set(s * (W / 2 - T / 2), H / 2, 0);
-      add(sp);
+      tgt.add(sp);
+      if (lod >= 2){
+        const lv = louver(sd * 0.44, sh * 0.17, 7, 'x');
+        lv.position.set(s * (W / 2 - T / 2 - 0.005), H * 0.30, 0);
+        tgt.add(lv);
+        const bx = s * (W / 2 - T - 0.004);
+        tgt.add(boltRow(5, 'z', sd * 0.17, bx, H - 0.20, 0, 'x'));
+        tgt.add(boltRow(5, 'z', sd * 0.17, bx, 0.20, 0, 'x'));
+      }
     }
   }
 
+  // ── 隔板（母线室 / 断路器室 / 电缆室）──
   if (P.partition){
-    const pw = W - 2 * SEC.a - 0.008;
-    const p1 = slab(pw, T, zIn * 0.96, matZinc);
-    p1.position.set(0, H * 0.782, zIn * 0.50); add(p1);
+    const pw = W - 2 * SEC.a - 0.012;
+    const p1 = foldedPanel(pw, zIn * 0.94, T, hem, SM(matZinc), 'y');
+    p1.position.set(0, H * 0.782, zIn * 0.50); G.part.add(p1);
 
-    const p2 = slab(pw, T, zIn * 0.96, matZinc);
-    p2.position.set(0, H * 0.462, -zIn * 0.48); add(p2);
+    const p2 = foldedPanel(pw, zIn * 0.94, T, hem, SM(matZinc), 'y');
+    p2.position.set(0, H * 0.462, -zIn * 0.48); G.part.add(p2);
 
-    const p3 = slab(pw, H * 0.70, T, matZinc);
-    p3.position.set(0, H * 0.435, -zIn + 0.075); add(p3);
+    const p3 = foldedPanel(pw, H * 0.70, T, hem, SM(matZinc), 'z');
+    p3.position.set(0, H * 0.435, -zIn + 0.075); G.part.add(p3);
   }
 
+  // ── 安装板（设备安装基板，可拆卸）──
+  if (P.mount && lod >= 2){
+    const pw = W - 2 * SEC.a - 0.016, ph = H * 0.44;
+    const mp = foldedPanel(pw, ph, T, hem, SM(matZinc), 'z');
+    mp.position.set(0, H * 0.50, -zIn + T / 2 + 0.004);
+    G.plate.add(mp);
+    // 冲孔阵列：上下两排横孔 + 两侧竖排孔
+    const hz = -zIn + 0.0095;
+    [ph * 0.40, -ph * 0.40].forEach(dy => {
+      G.plate.add(holeRow(9, 'x', pw * 0.105, 0, H * 0.50 + dy, hz, 'z'));
+    });
+    [-1, 1].forEach(sx => {
+      G.plate.add(holeRow(5, 'y', ph * 0.145, sx * pw * 0.42, H * 0.50, hz, 'z'));
+    });
+  }
+
+  // ── 柜门 ──
   if (P.doors){
-    const dw = W - 2 * SEC.a - 0.006;
-    const leaf = (y0, y1, zPos, side, hingeX, outZ, withWindow) => {
+    const dw = W - 2 * SEC.a - 0.008;
+    const leaf = (y0, y1, zPos, side, hingeX, outZ, target, opts) => {
       const hh = (y1 - y0) * H, cy = (y0 + y1) / 2 * H;
       const g = new THREE.Group();
       g.position.set(hingeX, cy, zPos);
-      root.add(g);
+      target.add(g);
 
-      const pan = slab(dw, hh, T, matZinc);
+      const pan = foldedPanel(dw, hh, T, hem, SM(matZinc), 'z');
       pan.position.set(side * dw / 2, 0, 0);
-      pan.castShadow = true; pan.receiveShadow = true;
       g.add(pan);
 
-      if (withWindow){
-        const win = slab(dw * 0.36, hh * 0.20, T * 0.7, matGlass);
-        win.position.set(side * dw * 0.40, hh * 0.20, 0);
-        g.add(win);
+      if (lod >= 2){
+        if (opts.window){
+          const fr = new THREE.Mesh(new THREE.BoxGeometry(dw * 0.36, hh * 0.215, T * 0.9), matZinc);
+          fr.position.set(side * dw * 0.38, hh * 0.21, outZ * 0.003);
+          g.add(fr);
+          const win = new THREE.Mesh(new THREE.BoxGeometry(dw * 0.32, hh * 0.18, T * 0.6), matGlass);
+          win.position.set(side * dw * 0.38, hh * 0.21, outZ * 0.006);
+          g.add(win);
+        }
+        if (opts.vent){
+          const lv = louver(dw * 0.30, hh * 0.20, 7, 'z');
+          lv.position.set(-side * dw * 0.30, -hh * 0.20, 0.004);
+          g.add(lv);
+        }
       }
+
+      // 把手
       const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.11, 10), SM(matBreakerDark));
-      handle.position.set(side * dw * 0.88, 0, outZ * 0.020);
+      handle.position.set(side * dw * 0.88, 0, outZ * 0.022);
       handle.rotation.z = Math.PI / 2;
       handle.castShadow = true;
       g.add(handle);
 
+      if (lod >= 2){
+        // 铰链（三个，落在铰链侧门边）
+        for (const hy of [-hh * 0.40, 0, hh * 0.40]){
+          const hg = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.062, 10), matBolt);
+          hg.position.set(side * 0.007, hy, 0);
+          hg.castShadow = true;
+          g.add(hg);
+        }
+        // 门边螺栓列（把手侧 + 铰链侧）
+        const bz = outZ * 0.010;
+        g.add(boltRow(7, 'y', hh * 0.115, side * dw * 0.925, 0, bz, 'z'));
+        g.add(boltRow(7, 'y', hh * 0.115, side * dw * 0.075, 0, bz, 'z'));
+      }
+
       doorPivots.push({ group: g, sign: -1, max: 1.74 });
       return g;
     };
-    leaf(0.055, 0.965, zIn + T / 2, 1, -xIn, 1, true);
-    leaf(0.055, 0.455, -zIn - T / 2, -1, xIn, -1, false);
+    leaf(0.055, 0.965, zIn + T / 2, 1, -xIn, 1, G.doorF, { window:true });
+    leaf(0.055, 0.455, -zIn - T / 2, -1, xIn, -1, G.doorB, { vent:true });
 
-    const backPlate = slab(dw, H * 0.49, T, matZinc);
+    // 后上封板
+    const backPlate = foldedPanel(dw, H * 0.49, T, hem, SM(matZinc), 'z');
     backPlate.position.set(0, H * 0.725, -zIn - T / 2);
-    add(backPlate);
+    G.doorB.add(backPlate);
   }
 }
 
@@ -551,6 +923,7 @@ function rebuildGuards(){
   if (!guardGroup) return;
   clear(guardGroup);
   buildGuards();
+  applyExplode();   // 分解态下净距包络要跟着收起，别在这里把它又点亮
   updateStats();
 }
 
@@ -560,46 +933,94 @@ function buildComponents(){
   const ghost = lod === 1;
 
   const M = (m) => ghost ? matGhost : m;
-  let TARGET = root;
-  const put = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; TARGET.add(mesh); return mesh; };
+  let TARGET = G.frame;
+  const put = (mesh, edge) => {
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    if (edge) withEdges(mesh, 24);
+    TARGET.add(mesh); return mesh;
+  };
   const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(m));
   const cyl = (r, h, m, s) => new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, s || 16), M(m));
 
+  // ─────────────── 母线室：主母排 ───────────────
   if (P.primary){
     const busLen = Math.max(0.32, W - 2 * SEC.a - 0.20);
     const busZ = -zIn + 0.17, busY = H * 0.855;
-    [[matPhaseC, 0.082], [matPhaseB, 0], [matPhaseA, -0.082]].forEach(([m, dy]) => {
-      const bar = box(busLen, 0.012, 0.05, m);
+    TARGET = G.bus;
+    // 铜母线本体 + 相色热缩套管：中段包裹、两端与接头处留出铜面 —— 与现场实物一致
+    [[matPhaseA, 0.082], [matPhaseB, 0], [matPhaseC, -0.082]].forEach(([pm, dy]) => {
+      const bar = box(busLen, 0.012, 0.05, matCopper);
       bar.position.set(0, busY + dy, busZ);
-      put(bar);
+      put(bar, true);
+      if (lod >= 2){
+        const sl = box(busLen * 0.62, 0.0138, 0.0538, pm);
+        sl.position.set(0, busY + dy, busZ); TARGET.add(sl);
+        [1, -1].forEach(s => {
+          const sk = box(busLen * 0.07, 0.0144, 0.0544, matShrink);
+          sk.position.set(s * busLen * 0.45, busY + dy, busZ); TARGET.add(sk);
+        });
+        // 中间接头压板 + 两颗接头螺栓（落在铜面外露段）
+        const jp = box(0.055, 0.004, 0.058, matLug);
+        jp.position.set(busLen * 0.40, busY + dy + 0.008, busZ); put(jp, true);
+        [1, -1].forEach(s => {
+          const jb = cyl(0.0062, 0.016, matBolt, 6);
+          jb.position.set(busLen * 0.40, busY + dy + 0.010, busZ + s * 0.018); TARGET.add(jb);
+        });
+      }
     });
+
+    // 支柱绝缘子（留在柜体上）
+    TARGET = G.frame;
     if (lod >= 2){
       [-0.19, 0, 0.19].forEach(x => {
         if (Math.abs(x) > xIn - 0.09) return;
-        const ins = cyl(0.026, 0.10, matInsulator, 14);
-        ins.position.set(x, busY - 0.20, busZ); put(ins);
+        // 支撑托板：把绝缘子顶端顶到最低一相母排底面
+        const brk = box(0.052, 0.012, 0.050, matLug);
+        brk.position.set(x, busY - 0.094, busZ); put(brk, true);
+        const ins = cyl(0.026, 0.105, matInsulator, 14);
+        ins.position.set(x, busY - 0.155, busZ); put(ins);
+        const flange = cyl(0.034, 0.010, matSteelDark, 14);
+        flange.position.set(x, busY - 0.213, busZ); put(flange);
       });
     }
 
+    // ─────────────── 断路器室：手车式断路器 ───────────────
     TARGET = carGroup;
     const bw = Math.min(W * 0.62, 0.52);
     const bh = H * 0.185, bd = Math.min(D * 0.40, 0.40);
     const by = H * 0.50, bz = zIn * 0.40;
 
     const chassis = box(bw, bh * 0.15, bd, matBreakerDark);
-    chassis.position.set(0, by - bh * 0.44, bz); put(chassis);
+    chassis.position.set(0, by - bh * 0.44, bz); put(chassis, true);
 
     const body = box(bw, bh * 0.60, bd * 0.92, matBreaker);
-    body.position.set(0, by, bz); put(body);
+    body.position.set(0, by, bz); put(body, true);
 
     if (!ghost){
-      const face = box(bw * 0.60, bh * 0.44, 0.016, matPanelBox);
-      face.position.set(0, by, bz + bd * 0.475); put(face);
+      // 上/下接线端子罩
+      [1, -1].forEach(s => {
+        const sh = box(bw * 0.72, bh * 0.10, bd * 0.22, matBreakerDark);
+        sh.position.set(0, by + s * bh * 0.36, bz - bd * 0.30); put(sh, true);
+      });
+      // 脱扣单元 + 操作手柄 + 铭牌 + 指示灯
+      const trip = box(bw * 0.34, bh * 0.18, 0.012, matBreakerDark);
+      trip.position.set(-bw * 0.14, by - bh * 0.06, bz + bd * 0.474); put(trip);
+      const lever = box(0.032, 0.062, 0.016, matPanelBox);
+      lever.position.set(bw * 0.26, by - bh * 0.05, bz + bd * 0.478); put(lever, true);
+      const tag = box(bw * 0.30, 0.030, 0.004, matLug);
+      tag.position.set(-bw * 0.14, by + bh * 0.16, bz + bd * 0.478); TARGET.add(tag);
       [-1, 1].forEach(k => {
         const lamp = cyl(0.015, 0.016, k > 0 ? matPhaseC : matPhaseB, 12);
         lamp.rotation.x = Math.PI / 2;
-        lamp.position.set(k * bw * 0.21, by + bh * 0.11, bz + bd * 0.49); put(lamp);
+        lamp.position.set(k * bw * 0.21, by + bh * 0.10, bz + bd * 0.49); TARGET.add(lamp);
       });
+      // 四角紧固螺栓
+      [1, -1].forEach(sx => [1, -1].forEach(sy => {
+        const bl = cyl(0.0060, 0.014, matBolt, 6);
+        bl.rotation.x = Math.PI / 2;
+        bl.position.set(sx * bw * 0.44, by + sy * bh * 0.28, bz + bd * 0.466);
+        TARGET.add(bl);
+      }));
     }
 
     const poleY = by + bh * 0.52;
@@ -607,7 +1028,7 @@ function buildComponents(){
     if (lod >= 2){
       [-1, 0, 1].forEach(k => {
         const pole = cyl(bw * 0.085, bh * 0.44, matBreakerDark, 14);
-        pole.position.set(k * bw * 0.30, poleY, bz); put(pole);
+        pole.position.set(k * bw * 0.30, poleY, bz); put(pole, true);
         const cap = cyl(bw * 0.105, 0.020, matCopper, 14);
         cap.position.set(k * bw * 0.30, by + bh * 0.75, bz); put(cap);
       });
@@ -619,17 +1040,26 @@ function buildComponents(){
         put(arm);
       });
     }
-    TARGET = root;
+
     // 静触头盒：装于柜内后壁，与三相触臂一一对位 —— 手车摇出后留在柜内
+    TARGET = G.frame;
     if (lod >= 2){
+      const p2y = H * 0.462;                    // 下方水平隔板的标高，做支撑基准
       [-1, 0, 1].forEach(k => {
+        const x = k * bw * 0.30;
         const tc = box(0.088, 0.105, 0.078, matInsulator);
-        tc.position.set(k * bw * 0.30, poleY, tcZ); put(tc);
+        tc.position.set(x, poleY, tcZ); put(tc, true);
         if (lod >= 3){
           const cup = cyl(0.026, 0.030, matCopper, 12);
           cup.rotation.x = Math.PI / 2;
-          cup.position.set(k * bw * 0.30, poleY, tcZ + 0.048); put(cup);
+          cup.position.set(x, poleY, tcZ + 0.048); put(cup);
         }
+        // 支撑绝缘子 + 托板：把触头盒落到隔板上，否则在分解视图里会"悬空"
+        const insTop = poleY - 0.058, insBot = p2y + 0.006;
+        const ins = cyl(0.020, insTop - insBot, matInsulator, 12);
+        ins.position.set(x, (insTop + insBot) / 2, -0.012); put(ins);
+        const seat = box(0.050, 0.010, 0.062, matInsulator);
+        seat.position.set(x, insTop + 0.004, 0.006); put(seat, true);
       });
     }
 
@@ -639,55 +1069,84 @@ function buildComponents(){
       const rIn = -zIn + 0.12, rFace = zIn + 0.02, rOut = zIn + 0.70;
       [xIn - 0.055, -(xIn - 0.055)].forEach(rx => {
         const seg1 = box(0.048, 0.050, rFace - rIn, matZinc);
-        seg1.position.set(rx, railY, (rIn + rFace) / 2); put(seg1);
+        seg1.position.set(rx, railY, (rIn + rFace) / 2); put(seg1, true);
         const seg2 = box(0.048, 0.050, rOut - rFace, matRailOut);
-        seg2.position.set(rx, railY, (rFace + rOut) / 2); put(seg2);
+        seg2.position.set(rx, railY, (rFace + rOut) / 2); put(seg2, true);
       });
     }
 
+    // ─────────────── 电流互感器 ───────────────
+    TARGET = G.ct;
     const ctY = H * 0.285, ctZ = -zIn + 0.24;
     const ctR = Math.min(0.052, W * 0.07);
     [-1, 0, 1].forEach(k => {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(ctR, ctR * 0.40, 6, 14), M(matInsulator));
+      const cx0 = k * Math.min(W * 0.19, 0.16);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(ctR, ctR * 0.40, 8, 20), M(matInsulator));
       ring.rotation.x = Math.PI / 2;
-      ring.position.set(k * Math.min(W * 0.19, 0.16), ctY, ctZ); put(ring);
+      ring.position.set(cx0, ctY, ctZ); put(ring);
+      if (lod >= 2){
+        const foot = box(ctR * 1.5, 0.030, ctR * 0.9, matInsulator);
+        foot.position.set(cx0, ctY - ctR * 0.58, ctZ - ctR * 0.35); put(foot, true);
+        const st = box(0.030, 0.020, 0.020, matPanelBox);
+        st.position.set(cx0 + ctR * 0.72, ctY + ctR * 0.55, ctZ - ctR * 0.5); put(st);
+      }
     });
 
+    // 接地铜排 / 避雷器（柜体件）
+    TARGET = G.frame;
     const gnd = box(Math.max(0.30, W * 0.58), 0.010, 0.038, matCopper);
-    gnd.position.set(0, H * 0.075, -zIn + 0.16); put(gnd);
+    gnd.position.set(0, H * 0.075, -zIn + 0.16); put(gnd, true);
 
     if (lod >= 3){
       [-1, 0, 1].forEach(k => {
         const mo = cyl(0.024, 0.11, matInsulator, 12);
         mo.position.set(k * Math.min(W * 0.20, 0.17), H * 0.155, -zIn + 0.245); put(mo);
+        const cap = cyl(0.028, 0.012, matCopper, 12);
+        cap.position.set(k * Math.min(W * 0.20, 0.17), H * 0.212, -zIn + 0.245); put(cap);
       });
     }
   }
 
+  // ─────────────── 电力电缆 ───────────────
   if (P.cable){
     const cx = Math.min(W * 0.19, 0.16);
     const ctY = H * 0.285, ctZ = -zIn + 0.24;
+    TARGET = G.cable;
 
     if (lod === 1){
       const blk = box(cx * 2 + 0.06, H * 0.30, 0.14, matGhost);
       blk.position.set(0, H * 0.19, -zIn + 0.22); put(blk);
     } else {
       const phases = [matPhaseC, matPhaseB, matPhaseA];
+      const y0 = 0.115;
       [-1, 0, 1].forEach((k, i) => {
         const x = k * cx;
         const curve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(x, 0.055, -zIn + 0.33),
-          new THREE.Vector3(x, 0.18, -zIn + 0.29),
+          new THREE.Vector3(x, y0, -zIn + 0.33),
+          new THREE.Vector3(x, 0.20, -zIn + 0.29),
           new THREE.Vector3(x, 0.40, -zIn + 0.26),
           new THREE.Vector3(x, ctY, ctZ),
           new THREE.Vector3(x, ctY + 0.20, ctZ - 0.01),
           new THREE.Vector3(x, ctY + 0.32, ctZ + 0.22)
         ]);
         put(new THREE.Mesh(new THREE.TubeGeometry(curve, 30, 0.019, 8, false), matCable));
-        const head = cyl(0.024, 0.055, phases[i], 12);
-        head.position.set(x, 0.085, -zIn + 0.325); put(head);
+
+        // 电缆热缩头（相色）→ 压接端子（铜鼻）→ 螺栓
+        const head = cyl(0.0235, 0.060, phases[i], 14);
+        head.position.set(x, y0 + 0.005, -zIn + 0.328); put(head);
+        const barrel = cyl(0.0185, 0.034, matLug, 12);
+        barrel.position.set(x, y0 - 0.040, -zIn + 0.328); put(barrel);
+        const tongue = box(0.036, 0.009, 0.030, matLug);
+        tongue.position.set(x, y0 - 0.062, -zIn + 0.336); put(tongue, true);
+        const bolt = cyl(0.0060, 0.020, matBolt, 6);
+        bolt.position.set(x, y0 - 0.070, -zIn + 0.336); TARGET.add(bolt);
+
         const boot = cyl(0.023, 0.045, matBreakerDark, 12);
         boot.position.set(x, ctY + 0.29, ctZ + 0.20); put(boot);
+        // 电缆抱箍
+        const clamp = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.006, 6, 12), matSteelDark);
+        clamp.rotation.x = Math.PI / 2;
+        clamp.position.set(x, 0.44, -zIn + 0.262); TARGET.add(clamp);
       });
 
       if (lod >= 3){
@@ -699,33 +1158,69 @@ function buildComponents(){
             new THREE.Vector3(dx + 0.040, 0.74, -zIn + 0.41)
           ]);
           put(new THREE.Mesh(new THREE.TubeGeometry(curve, 22, 0.008, 6, false), matCable));
+          // 二次线号管
+          for (const yy of [0.22, 0.46]){
+            const sl = cyl(0.011, 0.020, matTerm, 10);
+            sl.position.set(dx + 0.012, yy, -zIn + 0.318); TARGET.add(sl);
+          }
         });
-      }
-    }
-
-    const tw = Math.max(0.26, W * 0.46);
-    const term = box(tw, 0.052, 0.050, matPanelBox);
-    term.position.set(0, H * 0.195, -zIn + 0.055); put(term);
-    if (lod >= 3){
-      const n = 7;
-      for (let i = 0; i < n; i++){
-        const dv = box(0.006, 0.058, 0.054, matBreakerDark);
-        dv.position.set(-tw / 2 + (i + 1) * tw / (n + 1), H * 0.195, -zIn + 0.055);
-        put(dv);
       }
     }
   }
 
+  // ─────────────── 端子排（DIN 导轨 + 模块化端子块）───────────────
+  if (P.cable){
+    TARGET = G.term;
+    const tw = Math.max(0.26, W * 0.46);
+    const ty = H * 0.195, tz = -zIn + 0.055;
+    if (lod === 1){
+      const blk = box(tw, 0.10, 0.070, matGhost);
+      blk.position.set(0, ty, tz - 0.008); put(blk);
+    } else {
+      const n = 8, pitch = tw / (n + 0.6);
+      [1, -1].forEach((r, ri) => {
+        const ry = ty + r * 0.040;
+        const rail = box(tw, 0.007, 0.032, matDin);
+        rail.position.set(0, ry - 0.030, tz + 0.004); put(rail, true);
+        for (let i = 0; i < n; i++){
+          const blk = new THREE.Mesh(new THREE.BoxGeometry(pitch * 0.80, 0.054, 0.058),
+                                     (i + ri) % 2 ? matTerm : matTermAlt);
+          blk.position.set(-tw / 2 + (i + 0.8) * pitch, ry, tz - 0.006);
+          blk.castShadow = true; blk.receiveShadow = true;
+          withEdges(blk, 24);
+          TARGET.add(blk);
+          const sc = cyl(0.0055, 0.007, matBolt, 6);
+          sc.position.set(blk.position.x, ry + 0.030, tz - 0.006);
+          TARGET.add(sc);
+        }
+      });
+      // 短接铜排：现场用裸铜排把同电位端子并起来，压在端子排前方
+      const jmp = box(tw * 0.94, 0.010, 0.024, matCopper);
+      jmp.position.set(0, ty - 0.058, tz + 0.026); put(jmp, true);
+      const brk = box(tw * 1.05, 0.010, 0.092, matPanelBox);
+      brk.position.set(0, ty - 0.090, tz - 0.006); put(brk, true);
+      // 端子排标牌
+      const lb = box(tw * 0.9, 0.014, 0.003, matTerm);
+      lb.position.set(0, ty + 0.070, tz - 0.010); TARGET.add(lb);
+    }
+  }
+
+  // ─────────────── 二次仪表室 ───────────────
   if (P.secondary && lod >= 2){
+    TARGET = G.meter;
     const my = H * 0.855, mz = zIn - 0.085;
     const plate = box(Math.max(0.30, W * 0.44), 0.125, 0.012, matPanelBox);
-    plate.position.set(0, my, mz - 0.014); put(plate);
+    plate.position.set(0, my, mz - 0.014); put(plate, true);
     [-1, 0, 1].forEach(k => {
-      const dial = cyl(0.034, 0.014, matGlass, 18);
+      const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.037, 0.0055, 8, 22), matBreakerDark);
+      bezel.position.set(k * 0.115, my, mz); put(bezel);
+      const dial = cyl(0.034, 0.014, matGlass, 20);
       dial.rotation.x = Math.PI / 2;
       dial.position.set(k * 0.115, my, mz); put(dial);
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.0045, 6, 18), matBreakerDark);
-      rim.position.set(k * 0.115, my, mz); put(rim);
+      const needle = box(0.003, 0.026, 0.003, matPhaseC);
+      needle.position.set(k * 0.115, my + 0.008, mz + 0.009);
+      needle.rotation.z = -0.5;
+      TARGET.add(needle);
     });
   }
 }
@@ -788,6 +1283,8 @@ function buildDims(){
     o.position.copy(pos);
     dimGroup.add(o);
   });
+
+  dimGroup.visible = P.explode < 0.30;
 }
 
 const LOD_NOTE = {
@@ -801,10 +1298,12 @@ function updateStats(){
   root.traverse(o => {
     if (!o.isMesh || !o.geometry) return;
     if (o.userData.noStat) return;
-    mesh++;
+    const inst = o.isInstancedMesh ? o.count : 1;
     const g = o.geometry;
-    vert += g.attributes.position ? g.attributes.position.count : 0;
-    tri += g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
+    const nv = g.attributes.position ? g.attributes.position.count : 0;
+    mesh += inst;
+    vert += nv * inst;
+    tri += (g.index ? g.index.count / 3 : nv / 3) * inst;
   });
   document.getElementById('sMesh').textContent = mesh;
   document.getElementById('sTri').textContent = Math.round(tri).toLocaleString();
@@ -857,6 +1356,8 @@ bind('tSecondary', v => { P.secondary = v; build(); });
 bind('tMount',     v => { P.mount = v; build(); });
 bind('tDim',       v => { P.dim = v; buildDims(); });
 bind('tTag',       v => { P.tag = v; buildDims(); });
+bind('tEdges',     v => { P.edges = v; build(); });
+bind('tGrid',      v => { P.grid = v; grid.visible = v; });
 bind('tSpin',      v => { controls.autoRotate = v; });
 bind('tPart',      v => { P.partition = v; build(); });
 bind('tDoors',     v => { P.doors = v; build(); });
@@ -884,19 +1385,54 @@ rCarEl.addEventListener('input', () => {
   if (isOut !== carWasOut){ carWasOut = isOut; buildDims(); }
 });
 
+// ── 爆炸分解控制（滑块即时 / 按钮缓动）──
+const rExplEl = document.getElementById('rExpl'), vExplEl = document.getElementById('vExpl');
+const explBtns = document.getElementById('explBtns');
+let explAnim = null;
+
+function syncExpl(){
+  vExplEl.textContent = P.explode < 0.02 ? '装配态'
+    : P.explode > 0.98 ? '全分解' : Math.round(P.explode * 100) + '%';
+  explBtns.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('on', (b.dataset.e === '0') === (P.explode < 0.5)));
+  rExplEl.value = Math.round(P.explode * 100);
+}
+function setExplode(v, animate){
+  v = Math.max(0, Math.min(1, v));
+  if (!animate){ explAnim = null; P.explode = v; applyExplode(); refitDistance(); syncExpl(); return; }
+  explAnim = { from: P.explode, to: v, t0: performance.now(), dur: 950 };
+}
+rExplEl.addEventListener('input', () => setExplode(+rExplEl.value / 100, false));
+explBtns.addEventListener('click', e => {
+  const b = e.target.closest('button[data-e]');
+  if (b) setExplode(+b.dataset.e, true);
+});
+
 document.getElementById('tSpin').checked = true;
 controls.autoRotate = true;
+// 调试出口：无头验证时用来量化断言零件位移、相机取景，不影响正常交互
+window.__DBG = { THREE, scene, camera, controls, root, dimGroup, leaderGroup,
+                 EXPLODE, G, P, renderer, applyExplode, setExplode };
 P.doorOpen = +rDoorEl.value / 100;
 P.carPos = +rCarEl.value / 100;
 syncLabels();
 syncMotion();
+syncExpl();
 build();
 
 let first = true;
 renderer.setAnimationLoop(() => {
+  if (explAnim){
+    const k = Math.min(1, (performance.now() - explAnim.t0) / explAnim.dur);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;   // easeInOutQuad
+    P.explode = explAnim.from + (explAnim.to - explAnim.from) * e;
+    applyExplode(); refitDistance(); syncExpl();
+    if (k >= 1) explAnim = null;
+  }
   controls.update();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
+  deoverlapExtags();   // 必须在 CSS2DRenderer 之后，否则 transform 会被它覆盖掉
   if (first){
     first = false;
     const b = document.getElementById('boot');
