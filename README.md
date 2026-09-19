@@ -8,9 +8,13 @@
 
 选它作为起点的理由：骨架是柜体唯一的结构母体单元 —— 顶底板、前后柜门、隔室、安装梁，以及所有元器件最终都挂在它上面。而且它天然参数化：**一个 C 型钢截面函数，就能生成任意尺寸的柜架**。
 
-## 打开方式
+## 在线访问
 
-浏览器直接打开 `outputs/najie-rack-3d.html`，无需安装任何依赖、无需构建。
+https://shinelu308.github.io/najie-cabinet-3d/
+
+## 本地打开
+
+浏览器直接打开 `index.html`，无需安装任何依赖、无需构建。
 
 ## 交互
 
@@ -42,8 +46,8 @@
 ## 目录
 
 ```
+index.html                  主交付：可交互三维模型（单文件，GitHub Pages 入口）
 outputs/
-  najie-rack-3d.html        主交付：可交互三维模型（单文件）
   preview-rack-lod1.png     LOD 1 渲染验证图
   preview-rack-lod2.png     LOD 2 渲染验证图
   preview-rack-lod3.png     LOD 3 渲染验证图
