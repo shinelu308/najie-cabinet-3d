@@ -14,7 +14,7 @@
   html,body{margin:0;height:100%;overflow:hidden;background:#EDF1F6;
     font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     color:var(--ink);-webkit-font-smoothing:antialiased}
-  #c{display:block;width:100%;height:100%}
+  #c{display:block;width:100%;height:100%;touch-action:none}
   #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 
   .brand{position:absolute;left:24px;top:22px;display:flex;align-items:center;gap:12px;
@@ -27,20 +27,25 @@
   .brand .rule{width:1px;height:34px;background:var(--line)}
 
   .panel{position:absolute;right:24px;top:22px;width:268px;background:var(--panel);
-    border:1px solid var(--line);border-radius:12px;padding:16px;
-    box-shadow:0 8px 26px rgba(24,52,92,.09);backdrop-filter:blur(6px)}
-  .panel h2{margin:0 0 14px;font-size:13px;font-weight:600;color:var(--blue-d);
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    box-shadow:0 8px 26px rgba(24,52,92,.09);backdrop-filter:blur(6px);
+    max-height:calc(100vh - 44px);overflow-y:auto;scrollbar-width:thin;
+    scrollbar-color:#C6D3E2 transparent}
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-thumb{background:#C6D3E2;border-radius:3px}
+  .panel::-webkit-scrollbar-track{background:transparent}
+  .panel h2{margin:0 0 11px;font-size:13px;font-weight:600;color:var(--blue-d);
     letter-spacing:.6px;display:flex;align-items:center;gap:7px}
   .panel h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--blue)}
-  .sec{margin-bottom:14px}
+  .sec{margin-bottom:10px}
   .sec:last-child{margin-bottom:0}
-  .sec + .sec{border-top:1px solid #EDF1F6;padding-top:14px}
-  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .sec + .sec{border-top:1px solid #EDF1F6;padding-top:10px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
   .row .k{font-size:12px;color:var(--ink2)}
   .row .v{font-size:13px;font-weight:600;color:var(--blue-d);
     font-variant-numeric:tabular-nums}
   input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;
-    background:#E2E9F2;outline:none;margin:0 0 12px}
+    background:#E2E9F2;outline:none;margin:0 0 9px}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
     border-radius:50%;background:var(--blue);cursor:pointer;border:2.5px solid #fff;
     box-shadow:0 1px 5px rgba(27,79,156,.4)}
@@ -52,10 +57,10 @@
   .seg button.on{background:var(--blue);border-color:var(--blue);color:#fff;
     box-shadow:0 3px 10px rgba(27,79,156,.28)}
   .seg .sub{display:block;font-size:10px;opacity:.72;margin-top:1px;font-weight:400}
-  .lodnote{margin:10px 0 0;font-size:11.5px;line-height:1.55;color:#6B7686;
-    background:#F5F8FC;border:1px solid #E7EEF6;border-radius:7px;padding:7px 10px}
+  .lodnote{margin:8px 0 0;font-size:11.5px;line-height:1.52;color:#6B7686;
+    background:#F5F8FC;border:1px solid #E7EEF6;border-radius:7px;padding:6px 9px}
   .lodnote b{color:var(--blue-d);font-weight:600}
-  .toggles{display:flex;flex-wrap:wrap;gap:8px 14px}
+  .toggles{display:flex;flex-wrap:wrap;gap:6px 13px}
   .tg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);
     cursor:pointer;user-select:none}
   .tg input{accent-color:var(--blue);width:14px;height:14px;cursor:pointer;margin:0}
@@ -77,6 +82,10 @@
   .tag{font-size:11.5px;color:#33445C;white-space:nowrap;
     background:rgba(255,255,255,.92);padding:2px 7px;border-radius:5px;
     border:1px solid #DDE5EF}
+  .tag.guard{color:#7A4C06;background:rgba(255,247,232,.95);border-color:#E9C489;
+    font-weight:500;font-variant-numeric:tabular-nums;
+    white-space:normal;max-width:168px;line-height:1.34;text-align:center;padding:4px 8px}
+  .tag.guard.warn{color:#8E2A12;background:rgba(255,241,237,.96);border-color:#F0B6A4}
 
   #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:12px;background:#EDF1F6;z-index:20;transition:opacity .5s}
@@ -96,7 +105,7 @@
   <div class="rule"></div>
   <div>
     <h1>高低压开关柜 · 柜内三维模型</h1>
-    <p>上海纳杰电气 · 参数化生成 / 柜体骨架 + 一次回路 + 电缆接线</p>
+    <p>上海纳杰电气 · 参数化生成 / 骨架 + 板件 + 一次回路 + 电缆接线</p>
   </div>
 </div>
 
@@ -109,6 +118,21 @@
     <input type="range" id="rd" min="700" max="1600" step="50" value="1000">
     <div class="row"><span class="k">高度 H</span><span class="v" id="vh">2200 mm</span></div>
     <input type="range" id="rh" min="1800" max="2600" step="50" value="2200">
+  </div>
+
+  <div class="sec">
+    <h2 style="margin-bottom:10px">柜体结构</h2>
+    <div class="toggles">
+      <label class="tg"><input type="checkbox" id="tPart" checked>隔板</label>
+      <label class="tg"><input type="checkbox" id="tDoors" checked>门板</label>
+      <label class="tg"><input type="checkbox" id="tSides">侧板</label>
+      <label class="tg"><input type="checkbox" id="tGuard" checked>安全净距</label>
+    </div>
+    <div class="row" style="margin-top:10px"><span class="k">门开合</span><span class="v" id="vDoor">开启 100%</span></div>
+    <input type="range" id="rDoor" min="0" max="100" step="1" value="100">
+    <div class="row"><span class="k">手车摇出</span><span class="v" id="vCar">0 mm</span></div>
+    <input type="range" id="rCar" min="0" max="100" step="1" value="0">
+    <p class="lodnote" id="guardNote" style="display:none"></p>
   </div>
 
   <div class="sec">
@@ -128,6 +152,7 @@
       <label class="tg"><input type="checkbox" id="tSecondary" checked>二次元件</label>
       <label class="tg"><input type="checkbox" id="tMount" checked>安装梁</label>
       <label class="tg"><input type="checkbox" id="tDim" checked>尺寸标注</label>
+      <label class="tg"><input type="checkbox" id="tTag" checked>部件名称</label>
       <label class="tg"><input type="checkbox" id="tSpin" checked>自动旋转</label>
     </div>
     <button class="reset" id="bReset">复位视角</button>
@@ -140,7 +165,7 @@
     <div>三角面 <b id="sTri">—</b></div>
     <div>顶点 <b id="sVert">—</b></div>
   </div>
-  <div class="hint">拖拽旋转 · 滚轮缩放 · 右键平移</div>
+  <div class="hint">拖拽旋转 · 滚轮缩放 · 右键平移 · 面板可开合柜门 / 摇出手车</div>
 </div>
 
 <div id="boot"><div class="sp"></div><p>正在生成骨架几何…</p></div>
@@ -165,7 +190,9 @@ try {
 }
 
 const P = { W:0.80, D:1.00, H:2.20, lod:2, mount:true, dim:true,
-            primary:true, cable:true, secondary:true };
+            primary:true, cable:true, secondary:true,
+            partition:true, doors:true, sides:false, guards:true,
+            tag:true, doorOpen:1, carPos:0 };
 const SEC = { a:0.045, b:0.070, t:0.0035 };
 
 const canvas = document.getElementById('c');
@@ -243,10 +270,15 @@ const matCopper      = new THREE.MeshStandardMaterial({ color:0xB87333, metalnes
 const matInsulator   = new THREE.MeshStandardMaterial({ color:0x8A4A3C, metalness:0.14, roughness:0.72 });
 const matCable       = new THREE.MeshStandardMaterial({ color:0x22252A, metalness:0.08, roughness:0.88 });
 const matGhost       = new THREE.MeshStandardMaterial({ color:0xA8B2BF, metalness:0.20, roughness:0.80, transparent:true, opacity:0.32 });
+const matRailOut     = new THREE.MeshStandardMaterial({ color:0x76828F, metalness:0.38, roughness:0.58, transparent:true, opacity:0.55 });
 
 const root = new THREE.Group();
 const dimGroup = new THREE.Group();
 scene.add(root, dimGroup);
+
+let carGroup = null;
+let guardGroup = null;
+const doorPivots = [];
 
 function cProfile(a, b, t){
   const s = new THREE.Shape();
@@ -277,8 +309,10 @@ function strut(len, axis, lod, a, b, t, mat){
 function clear(g){
   while (g.children.length){
     const c = g.children.pop();
-    if (c.geometry) c.geometry.dispose();
-    if (c.isCSS2DObject && c.element?.parentNode) c.element.parentNode.removeChild(c.element);
+    c.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.isCSS2DObject && o.element?.parentNode) o.element.parentNode.removeChild(o.element);
+    });
   }
 }
 
@@ -342,9 +376,22 @@ function build(){
     }
   }
 
+  carGroup = new THREE.Group();
+  guardGroup = new THREE.Group();
+  root.add(carGroup, guardGroup);
+  doorPivots.length = 0;
+
+  buildShell();
   buildComponents();
+  buildGuards();
   buildDims();
+  applyMotion();
   updateStats();
+}
+
+function applyMotion(){
+  if (carGroup) carGroup.position.z = P.carPos * P.D * 0.62;
+  doorPivots.forEach(d => { d.group.rotation.y = d.sign * d.max * P.doorOpen; });
 }
 
 function lineBetween(p1, p2, group){
@@ -361,13 +408,160 @@ function dimLabel(text, pos){
   dimGroup.add(o);
 }
 
+function buildShell(){
+  const { W, D, H } = P;
+  const xIn = W / 2 - SEC.a, zIn = D / 2 - SEC.b;
+  const T = 0.004;
+  const add = (m) => { m.castShadow = true; m.receiveShadow = true; root.add(m); return m; };
+  const SM = (m) => P.lod === 1 ? matGhost : m;
+  const slab = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), SM(m));
+
+  if (P.sides){
+    const sh = H - 0.03, sd = D - 2 * SEC.b - 0.006;
+    for (const s of [1, -1]){
+      const sp = slab(T, sh, sd, matZinc);
+      sp.position.set(s * (W / 2 - T / 2), H / 2, 0);
+      add(sp);
+    }
+  }
+
+  if (P.partition){
+    const pw = W - 2 * SEC.a - 0.008;
+    const p1 = slab(pw, T, zIn * 0.96, matZinc);
+    p1.position.set(0, H * 0.782, zIn * 0.50); add(p1);
+
+    const p2 = slab(pw, T, zIn * 0.96, matZinc);
+    p2.position.set(0, H * 0.462, -zIn * 0.48); add(p2);
+
+    const p3 = slab(pw, H * 0.70, T, matZinc);
+    p3.position.set(0, H * 0.435, -zIn + 0.075); add(p3);
+  }
+
+  if (P.doors){
+    const dw = W - 2 * SEC.a - 0.006;
+    const leaf = (y0, y1, zPos, side, hingeX, outZ, withWindow) => {
+      const hh = (y1 - y0) * H, cy = (y0 + y1) / 2 * H;
+      const g = new THREE.Group();
+      g.position.set(hingeX, cy, zPos);
+      root.add(g);
+
+      const pan = slab(dw, hh, T, matZinc);
+      pan.position.set(side * dw / 2, 0, 0);
+      pan.castShadow = true; pan.receiveShadow = true;
+      g.add(pan);
+
+      if (withWindow){
+        const win = slab(dw * 0.36, hh * 0.20, T * 0.7, matGlass);
+        win.position.set(side * dw * 0.40, hh * 0.20, 0);
+        g.add(win);
+      }
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.11, 10), SM(matBreakerDark));
+      handle.position.set(side * dw * 0.88, 0, outZ * 0.020);
+      handle.rotation.z = Math.PI / 2;
+      handle.castShadow = true;
+      g.add(handle);
+
+      doorPivots.push({ group: g, sign: -1, max: 1.74 });
+      return g;
+    };
+    leaf(0.055, 0.965, zIn + T / 2, 1, -xIn, 1, true);
+    leaf(0.055, 0.455, -zIn - T / 2, -1, xIn, -1, false);
+
+    const backPlate = slab(dw, H * 0.49, T, matZinc);
+    backPlate.position.set(0, H * 0.725, -zIn - T / 2);
+    add(backPlate);
+  }
+}
+
+function buildGuards(){
+  if (!P.guards){
+    const gn0 = document.getElementById('guardNote');
+    if (gn0) gn0.style.display = 'none';
+    return;
+  }
+  const { W, D, H } = P;
+  const zIn = D / 2 - SEC.b;
+  const fog = new THREE.MeshBasicMaterial({ color:0xEF9F27, transparent:true, opacity:0.055,
+                                            depthWrite:false, side:THREE.DoubleSide });
+  const edge = new THREE.LineBasicMaterial({ color:0xBA7517, transparent:true, opacity:0.52 });
+
+  const cage = (w, h, d, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fog);
+    m.position.set(x, y, z);
+    m.userData.noStat = true;
+    guardGroup.add(m);
+    const l = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), edge);
+    l.position.set(x, y, z);
+    l.userData.noStat = true;
+    guardGroup.add(l);
+  };
+  const tag = (txt, x, y, z, warn, tip) => {
+    const d = document.createElement('div');
+    d.className = 'tag guard' + (warn ? ' warn' : '');
+    d.textContent = txt;
+    if (tip) d.title = tip;
+    const o = new CSS2DObject(d);
+    o.position.set(x, y, z);
+    guardGroup.add(o);
+  };
+
+  const passD = 0.80, passReq = 0.80;
+  cage(W, H * 0.94, passD, 0, H * 0.47, zIn + passD / 2);
+  tag('柜前通道 ' + Math.round(passD * 1000) + ' mm ' + (passD >= passReq ? '✓' : '⚠'),
+      -W / 2, H * 0.93, zIn + passD * 0.5, passD < passReq,
+      '柜前维护通道 实测 ' + Math.round(passD * 1000) + ' mm，要求 ≥' + Math.round(passReq * 1000) + ' mm');
+
+  const bw = Math.min(W * 0.62, 0.52), bh = H * 0.185, carD = 0.70;
+  cage(bw * 1.14, bh * 1.85, carD, 0, H * 0.50, zIn + carD / 2);
+  tag('手车抽出空间 ' + Math.round(carD * 1000) + ' mm', 0, H * 0.50 + bh * 1.12, zIn + carD / 2);
+
+  const gx = -(W - 2 * SEC.a - 0.20) / 2 - 0.05;
+  const gz = -zIn + 0.17;
+  const pitch = 0.082, bar = 0.012;
+  const gap = pitch - bar, req = 0.100;
+  for (const dy of [0, -pitch]){
+    const tick = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(gx - 0.03, H * 0.855 + dy, gz),
+      new THREE.Vector3(gx + 0.03, H * 0.855 + dy, gz)
+    ]), edge);
+    tick.userData.noStat = true;
+    guardGroup.add(tick);
+  }
+  const spanLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(gx, H * 0.855, gz),
+    new THREE.Vector3(gx, H * 0.855 - pitch, gz)
+  ]), edge);
+  spanLine.userData.noStat = true;
+  guardGroup.add(spanLine);
+  const gOk = gap >= req;
+  tag('母排净距 ' + Math.round(gap * 1000) + ' mm ' + (gOk ? '✓' : '⚠'),
+      gx - 0.08, H * 0.855 - pitch / 2, gz, !gOk,
+      '三相母排相间净距 实测 ' + Math.round(gap * 1000) + ' mm，要求 ≥' + Math.round(req * 1000) + ' mm');
+
+  // 校核基准写入面板固定图例（3D 内只留短数字，避免旋转视角下标签相互压盖）
+  const gn = document.getElementById('guardNote');
+  gn.style.display = 'block';
+  gn.innerHTML = '<b>安全净距校核</b>（12 kV 基准）<br>' +
+    '柜前通道 ' + Math.round(passD * 1000) + ' / ≥' + Math.round(passReq * 1000) + ' mm ' +
+    (passD >= passReq ? '✓' : '⚠') + '　母排相间 ' + Math.round(gap * 1000) + ' / ≥' +
+    Math.round(req * 1000) + ' mm ' + (gOk ? '✓' : '⚠');
+}
+
+function rebuildGuards(){
+  if (!guardGroup) return;
+  clear(guardGroup);
+  buildGuards();
+  updateStats();
+}
+
 function buildComponents(){
   const { W, D, H, lod } = P;
   const xIn = W / 2 - SEC.a, zIn = D / 2 - SEC.b;
   const ghost = lod === 1;
 
   const M = (m) => ghost ? matGhost : m;
-  const put = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh); return mesh; };
+  let TARGET = root;
+  const put = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; TARGET.add(mesh); return mesh; };
   const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(m));
   const cyl = (r, h, m, s) => new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, s || 16), M(m));
 
@@ -387,6 +581,7 @@ function buildComponents(){
       });
     }
 
+    TARGET = carGroup;
     const bw = Math.min(W * 0.62, 0.52);
     const bh = H * 0.185, bd = Math.min(D * 0.40, 0.40);
     const by = H * 0.50, bz = zIn * 0.40;
@@ -407,18 +602,46 @@ function buildComponents(){
       });
     }
 
+    const poleY = by + bh * 0.52;
+    const tcZ = bz - bd * 0.5 - 0.055;          // 断路器室后壁 · 静触头盒中心
     if (lod >= 2){
       [-1, 0, 1].forEach(k => {
         const pole = cyl(bw * 0.085, bh * 0.44, matBreakerDark, 14);
-        pole.position.set(k * bw * 0.30, by + bh * 0.52, bz); put(pole);
+        pole.position.set(k * bw * 0.30, poleY, bz); put(pole);
         const cap = cyl(bw * 0.105, 0.020, matCopper, 14);
         cap.position.set(k * bw * 0.30, by + bh * 0.75, bz); put(cap);
       });
-    }
-    if (lod >= 3){
+      // 触臂：自极柱沿 −z 插入静触头盒
       [-1, 0, 1].forEach(k => {
-        const tc = box(0.075, 0.085, 0.085, matInsulator);
-        tc.position.set(k * bw * 0.30, by + bh * 0.86, bz); put(tc);
+        const arm = cyl(bw * 0.050, bz - tcZ - 0.02, matCopper, 12);
+        arm.rotation.x = Math.PI / 2;
+        arm.position.set(k * bw * 0.30, poleY, (bz + tcZ) / 2);
+        put(arm);
+      });
+    }
+    TARGET = root;
+    // 静触头盒：装于柜内后壁，与三相触臂一一对位 —— 手车摇出后留在柜内
+    if (lod >= 2){
+      [-1, 0, 1].forEach(k => {
+        const tc = box(0.088, 0.105, 0.078, matInsulator);
+        tc.position.set(k * bw * 0.30, poleY, tcZ); put(tc);
+        if (lod >= 3){
+          const cup = cyl(0.026, 0.030, matCopper, 12);
+          cup.rotation.x = Math.PI / 2;
+          cup.position.set(k * bw * 0.30, poleY, tcZ + 0.048); put(cup);
+        }
+      });
+    }
+
+    // 手车导轨：柜内实装段托住底盘车，柜前延长段（半透明）为演示滑出路径
+    if (lod >= 2){
+      const railY = by - bh * 0.44 - bh * 0.075 - 0.025;
+      const rIn = -zIn + 0.12, rFace = zIn + 0.02, rOut = zIn + 0.70;
+      [xIn - 0.055, -(xIn - 0.055)].forEach(rx => {
+        const seg1 = box(0.048, 0.050, rFace - rIn, matZinc);
+        seg1.position.set(rx, railY, (rIn + rFace) / 2); put(seg1);
+        const seg2 = box(0.048, 0.050, rOut - rFace, matRailOut);
+        seg2.position.set(rx, railY, (rFace + rOut) / 2); put(seg2);
       });
     }
 
@@ -510,9 +733,11 @@ function buildComponents(){
 function buildDims(){
   clear(dimGroup);
   const { W, D, H } = P;
-  if (!P.dim) return;
+  if (!P.dim && !P.tag) return;
   const mm = v => Math.round(v * 1000) + ' mm';
   const off = 0.20;
+
+  if (P.dim){
 
   const zf = D / 2 + off, yf = 0.012;
   lineBetween(new THREE.Vector3(-W / 2, yf, zf), new THREE.Vector3(W / 2, yf, zf), dimGroup);
@@ -532,6 +757,9 @@ function buildDims(){
   lineBetween(new THREE.Vector3(xl - 0.05, H, zl), new THREE.Vector3(xl + 0.05, H, zl), dimGroup);
   dimLabel(mm(H), new THREE.Vector3(xl - 0.06, H / 2, zl));
 
+  }
+
+  if (!P.tag) return;
   const tags = [
     ['立柱 · C 型钢 ' + Math.round(SEC.a * 1000) + '×' + Math.round(SEC.b * 1000) + '×' + (SEC.t * 1000).toFixed(1),
       new THREE.Vector3(-W / 2 - 0.16, H * 0.68, D / 2 * 0.35)],
@@ -542,7 +770,10 @@ function buildDims(){
   if (P.lod === 3) tags.push(['加强竖梁', new THREE.Vector3(0.02, H * 0.32, D / 2 + 0.09)]);
   if (P.primary && P.lod >= 2){
     tags.push(['主母排 A/B/C', new THREE.Vector3(W * 0.22, H * 0.945, -D / 2 - 0.08)]);
+    if (P.carPos > 0.05)
+      tags.push(['静触头盒', new THREE.Vector3(-W * 0.30, H * 0.70, -D * 0.34)]);
     tags.push(['手车式断路器', new THREE.Vector3(W * 0.36, H * 0.58, D / 2 + 0.10)]);
+    tags.push(['手车导轨', new THREE.Vector3(W * 0.34, 0.80, D / 2 + 0.02)]);
     tags.push(['电流互感器', new THREE.Vector3(W * 0.34, H * 0.245, D / 2 + 0.10)]);
   }
   if (P.cable && P.lod >= 2){
@@ -560,15 +791,16 @@ function buildDims(){
 }
 
 const LOD_NOTE = {
-  1: '<b>LOD 1 外形</b> — 骨架方柱外廓 + 元器件占位块。<br>只用于空间校核与方案排布。',
-  2: '<b>LOD 2 工程</b> — 真实 C 型钢 + 断路器 / 互感器 / 三相母排<br>+ 电缆走向 + 端子排。可装配、可做干涉检查。',
-  3: '<b>LOD 3 精细</b> — 追加二次仪表、避雷器、支柱绝缘子、<br>备用控制电缆、端子分片。可出加工与装配图。'
+  1: '<b>LOD 1 外形</b> — 骨架方柱外廓 + 柜体板件与元器件的<b>半透明占位块</b>。<br>只用于空间校核与方案排布，不可出图。',
+  2: '<b>LOD 2 工程</b> — 真实 C 型钢骨架 + 侧板 / 隔板 / 门板；手车式断路器、<br>静触头盒、手车导轨、电流互感器、三相母排、电力电缆与端子排。<br>可装配、可做带电净距与维护空间校核。',
+  3: '<b>LOD 3 精细</b> — 追加二次仪表、避雷器、支柱绝缘子、备用控制电缆、<br>端子分片与柜底安装脚。可出加工与装配图。'
 };
 
 function updateStats(){
   let mesh = 0, tri = 0, vert = 0;
   root.traverse(o => {
     if (!o.isMesh || !o.geometry) return;
+    if (o.userData.noStat) return;
     mesh++;
     const g = o.geometry;
     vert += g.attributes.position ? g.attributes.position.count : 0;
@@ -603,6 +835,7 @@ function applySize(keepView){
   P.W = +rw.value / 1000; P.D = +rd.value / 1000; P.H = +rh.value / 1000;
   syncLabels();
   build();
+  syncMotion();
   if (keepView && Math.abs(oldH - P.H) > 0.001){
     setView();
   }
@@ -623,12 +856,40 @@ bind('tCable',     v => { P.cable = v; build(); });
 bind('tSecondary', v => { P.secondary = v; build(); });
 bind('tMount',     v => { P.mount = v; build(); });
 bind('tDim',       v => { P.dim = v; buildDims(); });
+bind('tTag',       v => { P.tag = v; buildDims(); });
 bind('tSpin',      v => { controls.autoRotate = v; });
+bind('tPart',      v => { P.partition = v; build(); });
+bind('tDoors',     v => { P.doors = v; build(); });
+bind('tSides',     v => { P.sides = v; build(); });
+bind('tGuard',     v => { P.guards = v; rebuildGuards(); });
 document.getElementById('bReset').addEventListener('click', () => { setView(); });
+
+function syncMotion(){
+  const d = document.getElementById('vDoor'), c = document.getElementById('vCar');
+  if (d) d.textContent = P.doorOpen > 0
+    ? '开启 ' + Math.round(P.doorOpen * 100) + '%' : '关闭';
+  if (c) c.textContent = Math.round(P.carPos * P.D * 620) + ' mm';
+}
+
+const rDoorEl = document.getElementById('rDoor'), rCarEl = document.getElementById('rCar');
+rDoorEl.addEventListener('input', () => {
+  P.doorOpen = +rDoorEl.value / 100;
+  syncMotion(); applyMotion();
+});
+let carWasOut = false;
+rCarEl.addEventListener('input', () => {
+  P.carPos = +rCarEl.value / 100;
+  syncMotion(); applyMotion();
+  const isOut = P.carPos > 0.05;
+  if (isOut !== carWasOut){ carWasOut = isOut; buildDims(); }
+});
 
 document.getElementById('tSpin').checked = true;
 controls.autoRotate = true;
+P.doorOpen = +rDoorEl.value / 100;
+P.carPos = +rCarEl.value / 100;
 syncLabels();
+syncMotion();
 build();
 
 let first = true;
