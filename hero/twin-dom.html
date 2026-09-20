@@ -1,0 +1,236 @@
+<!-- ══════════ 数字孪生 HUD（试装）══════════ -->
+<div id="tw">
+
+  <!-- 顶栏：模式切换 -->
+  <div class="tw-modes">
+    <b>视图</b>
+    <button type="button" data-mode="twin" class="on">数字孪生</button>
+    <button type="button" data-mode="struct">结构浏览</button>
+  </div>
+
+  <!-- 相序图例（浮在模型上方） -->
+  <div class="scope card">
+    <span><i style="background:#C99A00"></i>A 相</span>
+    <span><i style="background:#17803D"></i>B 相</span>
+    <span><i style="background:#C0392B"></i>C 相</span>
+    <span style="color:#A8B2BF">│</span>
+    <span>粒子流速 ∝ 实时电流</span>
+  </div>
+
+  <!-- ══════ 左：一次主接线图 ══════ -->
+  <aside class="tw-sl card">
+    <h2>一次主接线<small>进线柜 · KYN28A-12</small></h2>
+    <div class="slwrap">
+    <svg viewBox="0 0 276 452" role="img" aria-label="一次主接线图">
+      <defs>
+        <marker id="twArw" viewBox="0 0 10 10" refX="5" refY="5"
+                markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0 1 L9 5 L0 9 z" fill="#1B4F9C"/>
+        </marker>
+      </defs>
+
+      <!-- 主母排 -->
+      <text class="sl-t b" x="26" y="14">10 kV 主母排</text>
+      <text class="sl-t s" x="124" y="14">A/B/C 三线 · TMY 铜排</text>
+      <line class="sl-wire hot" x1="26" y1="26" x2="196" y2="26"
+            stroke="#C98A46" stroke-width="5" stroke-linecap="round" data-hot="#C98A46"/>
+      <line x1="196" y1="19" x2="196" y2="33" stroke="#123A75" stroke-width="2"/>
+      <text class="sl-t s" x="202" y="29">→ 相邻柜</text>
+
+      <!-- 引线（穿墙套管 + 引线铜排） -->
+      <line class="sl-wire hot" x1="112" y1="26" x2="112" y2="72"
+            stroke="#C98A46" stroke-width="3" data-hot="#C98A46"/>
+      <line x1="106" y1="62" x2="106" y2="30" stroke="#1B4F9C" stroke-width="1.6"
+            marker-end="url(#twArw)" opacity=".5"/>
+      <text class="sl-t" x="122" y="44">穿墙套管 · 引线铜排</text>
+      <text class="sl-val" x="122" y="60" id="twSlI">477 A</text>
+
+      <!-- 上静触头（可插拔） -->
+      <line x1="112" y1="72" x2="112" y2="75" stroke="#33455C" stroke-width="2.4"/>
+      <line x1="112" y1="81" x2="112" y2="88" stroke="#33455C" stroke-width="2.4"/>
+      <circle cx="112" cy="78" r="2.8" fill="#fff" stroke="#33455C" stroke-width="1.8"/>
+      <text class="sl-t" x="122" y="81">上静触头 ×3</text>
+
+      <!-- 真空断路器 -->
+      <rect x="86" y="88" width="52" height="70" rx="5"
+            fill="#F7FAFD" stroke="#123A75" stroke-width="2"/>
+      <line x1="95" y1="96" x2="129" y2="150" stroke="#C0392B" stroke-width="2.4"/>
+      <line x1="129" y1="96" x2="95" y2="150" stroke="#C0392B" stroke-width="2.4"/>
+      <text class="sl-t b" x="146" y="112">真空断路器</text>
+      <text class="sl-t s" x="146" y="124">VCB · 3P 手车</text>
+      <line x1="106" y1="154" x2="106" y2="96" stroke="#1B4F9C" stroke-width="1.6"
+            marker-end="url(#twArw)" opacity=".5"/>
+
+      <!-- 下静触头 -->
+      <line x1="112" y1="158" x2="112" y2="163" stroke="#33455C" stroke-width="2.4"/>
+      <line x1="112" y1="169" x2="112" y2="172" stroke="#33455C" stroke-width="2.4"/>
+      <circle cx="112" cy="166" r="2.8" fill="#fff" stroke="#33455C" stroke-width="1.8"/>
+      <text class="sl-t" x="122" y="169">下静触头 ×3</text>
+
+      <!-- 电流互感器 -->
+      <line class="sl-wire hot" x1="112" y1="170" x2="112" y2="248"
+            stroke="#C98A46" stroke-width="3" data-hot="#C98A46"/>
+      <circle cx="112" cy="194" r="15" fill="none" stroke="#8A4A3C" stroke-width="2.2"/>
+      <circle cx="112" cy="224" r="15" fill="none" stroke="#8A4A3C" stroke-width="2.2"/>
+      <text class="sl-t b" x="136" y="196">电流互感器</text>
+      <text class="sl-t s" x="136" y="208">CT 600/5A · 3只</text>
+      <text class="sl-t s" x="136" y="220">→ 保护 / 计量</text>
+      <line x1="106" y1="244" x2="106" y2="180" stroke="#1B4F9C" stroke-width="1.6"
+            marker-end="url(#twArw)" opacity=".5"/>
+
+      <!-- 支路：接地开关 / 避雷器（正常处于分位，不通电） -->
+      <circle cx="112" cy="248" r="3.2" fill="#33455C"/>
+      <line class="sl-wire" x1="112" y1="248" x2="176" y2="248" stroke="#B8C0CC" stroke-width="1.6"/>
+      <line x1="176" y1="248" x2="176" y2="262" stroke="#33455C" stroke-width="2"/>
+      <line x1="164" y1="262" x2="188" y2="262" stroke="#33455C" stroke-width="2"/>
+      <line x1="168" y1="267" x2="184" y2="267" stroke="#33455C" stroke-width="2"/>
+      <line x1="172" y1="272" x2="180" y2="272" stroke="#33455C" stroke-width="2"/>
+      <text class="sl-t" x="194" y="265">接地开关</text>
+
+      <circle cx="112" cy="286" r="3.2" fill="#33455C"/>
+      <line class="sl-wire" x1="112" y1="286" x2="176" y2="286" stroke="#B8C0CC" stroke-width="1.6"/>
+      <rect x="168" y="280" width="16" height="24" rx="2.5"
+            fill="#fff" stroke="#33455C" stroke-width="1.8"/>
+      <line x1="170" y1="288" x2="182" y2="296" stroke="#33455C" stroke-width="1.6"/>
+      <text class="sl-t" x="194" y="296">避雷器</text>
+
+      <!-- 电缆终端 + 进线电缆 -->
+      <line class="sl-wire hot" x1="112" y1="286" x2="112" y2="326"
+            stroke="#C98A46" stroke-width="3" data-hot="#C98A46"/>
+      <circle cx="112" cy="332" r="5" fill="#22252A"/>
+      <text class="sl-t b" x="122" y="330">电缆终端 ×3</text>
+      <text class="sl-t s" x="122" y="342">热缩头 + 铜鼻压接</text>
+      <line class="sl-wire hot" x1="112" y1="337" x2="112" y2="386"
+            stroke="#3A3F47" stroke-width="3.4" data-hot="#3A3F47"/>
+      <line x1="106" y1="382" x2="106" y2="342" stroke="#1B4F9C" stroke-width="1.6"
+            marker-end="url(#twArw)" opacity=".5"/>
+
+      <!-- 缆沟与电源 -->
+      <line x1="34" y1="386" x2="190" y2="386" stroke="#8A94A3" stroke-width="1.6"/>
+      <line x1="34" y1="386" x2="26" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="58" y1="386" x2="50" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="82" y1="386" x2="74" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="106" y1="386" x2="98" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="130" y1="386" x2="122" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="154" y1="386" x2="146" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <line x1="178" y1="386" x2="170" y2="394" stroke="#C3CCD8" stroke-width="1.4"/>
+      <text class="sl-t b" x="26" y="410">进线电源 · 10 kV</text>
+      <text class="sl-t s" x="26" y="422">3×YJV22-8.7/15</text>
+
+      <!-- 方向说明 -->
+      <line x1="26" y1="434" x2="248" y2="434" stroke="#EDF1F6" stroke-width="1"/>
+      <text class="sl-t s" x="26" y="447">电流路径：电缆 → CT → 断路器 → 主母排</text>
+    </svg>
+    </div>
+    <div class="sl-leg">
+      <span><i style="background:#C99A00"></i>A</span>
+      <span><i style="background:#17803D"></i>B</span>
+      <span><i style="background:#C0392B"></i>C</span>
+      <span style="color:#A8B2BF">│</span>
+      <span id="twLegI">带电：I ≈ 477 A</span>
+    </div>
+  </aside>
+
+  <!-- ══════ 右：实时运行数据 ══════ -->
+  <aside class="tw-rt card">
+    <div class="tw-badge" id="twBadge"><i></i>运行中 · 合闸<b>已储能</b></div>
+
+    <div class="tw-sec">
+      <h2>三相电流<small>额定 630 A</small></h2>
+      <div class="tw-i"><em style="color:#C99A00">A</em>
+        <span class="bar"><i id="twBA" style="width:74%;background:#C99A00"></i></span>
+        <b id="twIA">468.2<u>A</u></b></div>
+      <div class="tw-i"><em style="color:#17803D">B</em>
+        <span class="bar"><i id="twBB" style="width:75%;background:#17803D"></i></span>
+        <b id="twIB">471.5<u>A</u></b></div>
+      <div class="tw-i"><em style="color:#C0392B">C</em>
+        <span class="bar"><i id="twBC" style="width:74%;background:#C0392B"></i></span>
+        <b id="twIC">465.7<u>A</u></b></div>
+      <div class="tw-kv" style="margin-top:9px">
+        <div><span>线电压 U</span><b id="twU">10.35<u>kV</u></b></div>
+        <div><span>频率 f</span><b id="twF">50.01<u>Hz</u></b></div>
+        <div><span>有功 P</span><b id="twP">8.21<u>MW</u></b></div>
+        <div><span>功率因数</span><b id="twPF">0.980</b></div>
+      </div>
+    </div>
+
+    <div class="tw-sec">
+      <h2>母排温度<small>限值 90 ℃</small></h2>
+      <div class="tw-temp"><em style="color:#C99A00">A</em>
+        <span class="g"><span></span></span><b id="twTA">49.2 ℃</b></div>
+      <div class="tw-temp"><em style="color:#17803D">B</em>
+        <span class="g"><span></span></span><b id="twTB">50.8 ℃</b></div>
+      <div class="tw-temp"><em style="color:#C0392B">C</em>
+        <span class="g"><span></span></span><b id="twTC">48.5 ℃</b></div>
+      <p style="margin:7px 0 0;font-size:10.5px;color:#8A94A3;line-height:1.5">
+        柜内 26.4 ℃ · 温升按 I² 推算</p>
+    </div>
+
+    <div class="tw-sec">
+      <h2>开关状态</h2>
+      <div class="tw-kv">
+        <div><span>断路器</span><b style="font-size:12.5px" id="twPos">合闸</b></div>
+        <div><span>储能</span><b style="font-size:12.5px" id="twSpr">已储能</b></div>
+        <div><span>手车位置</span><b style="font-size:12.5px" id="twCar">工作位</b></div>
+        <div><span>联锁</span><b style="font-size:12.5px" id="twLock">允许操作</b></div>
+      </div>
+    </div>
+
+    <div class="tw-sec">
+      <h2>负荷趋势<small>近 60 s</small></h2>
+      <svg class="tw-trend" id="twTrend" viewBox="0 0 260 56" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="twGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1B4F9C" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="#1B4F9C" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="14" x2="260" y2="14" stroke="#EDF1F6" stroke-width="1"/>
+        <line x1="0" y1="28" x2="260" y2="28" stroke="#EDF1F6" stroke-width="1"/>
+        <line x1="0" y1="42" x2="260" y2="42" stroke="#EDF1F6" stroke-width="1"/>
+        <path id="twArea" fill="url(#twGrad)"/>
+        <path id="twLine" fill="none" stroke="#1B4F9C" stroke-width="1.8"
+              stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <div class="tw-sec">
+      <h2>事件记录</h2>
+      <!-- 日志由 twin.js 在启动时按真实时钟填充，避免写死时间与实际演出不符 -->
+      <div class="tw-log" id="twLog"></div>
+    </div>
+  </aside>
+
+  <!-- ══════ 底部控制条 ══════ -->
+  <div class="tw-ctl card">
+    <button class="tw-btn pri" type="button" id="twClose">合闸</button>
+    <button class="tw-btn dan" type="button" id="twOpen">分闸</button>
+    <button class="tw-btn" type="button" id="twReset">复位</button>
+    <span class="sep"></span>
+    <label>负载率
+      <input type="range" id="twLoad" min="0" max="120" step="1" value="75">
+      <span class="val" id="twLoadV">75%</span>
+    </label>
+    <span class="sep"></span>
+    <label>工况
+      <select id="twFault" style="font:inherit;font-size:11.5px;padding:5px 7px;
+        border:1px solid #D6DEE8;border-radius:7px;background:#fff;color:#5B6675">
+        <option value="0">正常运行</option>
+        <option value="1">过负荷</option>
+        <option value="2">三相短路</option>
+        <option value="3">单相接地</option>
+      </select>
+    </label>
+    <span class="sep"></span>
+    <div class="tw-steps" id="twSteps">
+      <button type="button" data-s="1" title="进线">1</button>
+      <button type="button" data-s="2" title="计量保护">2</button>
+      <button type="button" data-s="3" title="开断">3</button>
+      <button type="button" data-s="4" title="分配">4</button>
+      <button type="button" data-s="0" title="全部显示" class="on">全部</button>
+    </div>
+  </div>
+
+  <!-- 步骤旁白 -->
+  <div class="tw-narr" id="twNarr" hidden><b>STEP 1</b><span></span></div>
+</div>

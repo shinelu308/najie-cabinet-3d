@@ -1709,5 +1709,74 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════════
+   工程效果图模式（index.html?mode=drawing）
+   ──────────────────────────────────────────────────────────────────────────
+   默认打开 index.html 仍然是原来的可交互三维模型；只有地址带 ?mode=drawing 时，
+   才在模型就绪后叠加「浅色工程制图风 + 双柜并排 + 电流流动光带（方案 B）」这一层。
+
+   ⚠️ 为什么做成模式、而不是直接改默认：这套演示层会改写壳体材质、灯光、机位，
+      并铺满整页 HUD —— 一旦默认启用就盖掉了原有的交互拆解演示。做成模式两套并存。
+   ⚠️ 加载顺序不能变：拓扑 → 堆料 → 双柜+标注 → 制图化 → 电流。
+      双柜层要把堆料分组 __artDetail 一并克隆给第二台柜，所以必须跑在堆料之后。
+   ⚠️ 只有 twin-art.js 必须走 module（它内部有 await import('three/addons/...')，
+      靠页面里的 importmap 解析），其余四层都是普通脚本。 */
+const DRAWING_MODE = new URLSearchParams(location.search).get('mode') === 'drawing';
+if (DRAWING_MODE) {
+  const H = (f) => 'hero/' + f;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const untilReady = () => (window.__READY === true) ? Promise.resolve()
+    : new Promise((r) => { const t = setInterval(() => {
+        if (window.__READY === true) { clearInterval(t); r(); } }, 120); });
+  const classic = (src) => new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = () => rej(new Error('演示层加载失败：' + src));
+    document.body.appendChild(s);
+  });
+  try {
+    await untilReady();
+
+    const lk = document.createElement('link');
+    lk.rel = 'stylesheet'; lk.href = H('twin.css');
+    document.head.appendChild(lk);
+    // ⚠️ 用 visibility 而不是 display：双柜层随后要按投影量 DOM 矩形，
+    //    display:none 会让所有矩形归零。visibility 保留布局又不闪 HUD。
+    const hd = document.createElement('style');
+    hd.textContent = '#tw{visibility:hidden}';
+    document.head.appendChild(hd);
+
+    document.body.insertAdjacentHTML('beforeend',
+      await fetch(H('twin-dom.html')).then((r) => r.text()));
+
+    await classic(H('twin.js'));          // 电气拓扑 + 电流路径 CURVES + 引线铜排
+    await wait(900);
+    await import('./hero/twin-art.js');   // 柜内程序化堆料（module，见顶部说明）
+    await wait(1600);
+    await classic(H('c4d-preview.js'));   // 克隆第二台柜 + 尺寸标注 + 引线 + 柜顶铭牌
+    await classic(H('drawing.js'));       // 浅色工程制图化（实板白漆 + 前门玻璃）
+    window.__CP.layout();                 // 页脚高度已知，重排一次引线与尺寸标签
+    window.__FLOW = 'B';                  // 电流方案 B · 流动光带
+    await classic(H('flow2.js'));
+
+    // 机位一动，按投影定位的标签必须跟着重排（按帧节流，别在拖拽里逐帧量 DOM）
+    const D = window.__DBG;
+    if (D && D.controls && window.__CP) {
+      let pend = false;
+      D.controls.addEventListener('change', () => {
+        if (pend) return;
+        pend = true;
+        requestAnimationFrame(() => { pend = false; window.__CP.layout(); });
+      });
+    }
+    console.log('[hero] 工程效果图模式就绪 ｜ 双柜 + 浅色制图 + 电流方案 B');
+  } catch (e) {
+    console.error('[hero] 演示层未能加载：', e && e.message);
+  }
+}
+</script>
 </body>
 </html>
